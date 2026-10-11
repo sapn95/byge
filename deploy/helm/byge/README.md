@@ -7,6 +7,13 @@ use.
 helm install byge ./deploy/helm/byge
 ```
 
+`byge` there is the release name, and every `helm upgrade` below uses it
+because that is what the line above installed. A release installed while this
+chart was still called `kanban` is still named `kanban`, and Helm matches on
+that name and not on the chart's: upgrade it as `helm upgrade kanban`, or
+reinstall under the new name. Renaming a live release is not something Helm
+does.
+
 ## Storage
 
 `storage: postgres` is the default and expects a database. `postgres.enabled`
