@@ -19,8 +19,8 @@ import (
 	"io"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/store"
 )
 
 // Format is the version of the snapshot document. Every snapshot carries it

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
 )
 
 // readableOn returns a text colour that can be read on the given background.

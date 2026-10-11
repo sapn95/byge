@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 // A board is addressed by slug, the way a page is, so a URL a person can read

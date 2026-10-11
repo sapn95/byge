@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"kanban/assets"
+	"byge/assets"
 )
 
 // A number in prose that nothing checks is a number that goes stale, and this

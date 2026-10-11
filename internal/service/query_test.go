@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 func TestParseQuery(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 // Config is the effective configuration of one kanban process.
 //
 // The `env` tag names the variable a field is read from. It is what Settings
-// walks for `kanban doctor`, so a field without one is a field the doctor does
+// walks for `byge doctor`, so a field without one is a field the doctor does
 // not report; a test asserts that every tag names a variable FromEnv actually
 // reads. `secret` marks a value that must not be printed: true masks it, url
 // keeps the address and takes out the password.
@@ -74,7 +74,7 @@ type Config struct {
 	Avatars map[string]string `env:"AVATARS"` // a pair that is not a pair is refused on start, not skipped
 
 	// Where the scheduler puts snapshots and how often. Neither a directory nor a
-	// bucket means no schedule, and `kanban export` is then the only way a
+	// bucket means no schedule, and `byge export` is then the only way a
 	// snapshot gets taken.
 	BackupInterval   time.Duration `env:"BACKUP_INTERVAL"`                 // 0 turns the schedule off; under a minute is refused
 	BackupKeep       int           `env:"BACKUP_KEEP"`                     // 0 keeps every snapshot; the rest go after a successful write
@@ -91,7 +91,7 @@ type Config struct {
 	AWSSessionToken    string `env:"AWS_SESSION_TOKEN" secret:"true"`     // only for temporary credentials
 
 	// What the process does on start, and how much it says while it runs.
-	AutoMigrate bool   `env:"AUTO_MIGRATE"` // false: run `kanban migrate` yourself
+	AutoMigrate bool   `env:"AUTO_MIGRATE"` // false: run `byge migrate` yourself
 	LogLevel    string `env:"LOG_LEVEL"`    // debug | info | warn | error
 	LogFormat   string `env:"LOG_FORMAT"`   // text | json
 }

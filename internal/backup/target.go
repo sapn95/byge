@@ -32,7 +32,7 @@ type Target interface {
 // listing the chronological one. Retention and the freshness check on start
 // both lean on that, so neither has to read the files to know their age.
 const (
-	namePrefix = "kanban-"
+	namePrefix = "byge-"
 	nameSuffix = ".json"
 	nameLayout = "20060102T150405Z"
 )

@@ -1,5 +1,5 @@
 apiVersion: v2
-name: kanban
+name: byge
 description: A self-hosted kanban board. One static binary, with Postgres, SQLite or in-memory storage
 type: application
 # The chart is installed from this path in git, not from a registry, so this
@@ -9,10 +9,10 @@ version: 0.10.0
 # on a v* tag. Upstream's own packages stop at 1.0.1, which is where this fork
 # started; the boards, identity, search, comments and archive came after it.
 appVersion: "2.13.0"
-icon: https://raw.githubusercontent.com/sapn95/golang-kanban/homelab/docs/logo-512.png
-home: https://github.com/sapn95/golang-kanban
+icon: https://raw.githubusercontent.com/sapn95/byge/homelab/docs/logo-512.png
+home: https://github.com/sapn95/byge
 sources:
-  - https://github.com/sapn95/golang-kanban
+  - https://github.com/sapn95/byge
   - https://github.com/NicolasHaas/golang-kanban
 maintainers:
   - name: sapn95

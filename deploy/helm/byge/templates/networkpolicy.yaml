@@ -5,11 +5,11 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "kanban.fullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.fullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {{- include "kanban.selectorLabels" . | nindent 6 }}
+    matchLabels: {{- include "byge.selectorLabels" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
@@ -44,7 +44,7 @@ spec:
     {{- if and (eq .Values.storage "postgres") .Values.postgres.enabled }}
     - to:
         - podSelector:
-            matchLabels: {{- include "kanban.postgresSelectorLabels" . | nindent 14 }}
+            matchLabels: {{- include "byge.postgresSelectorLabels" . | nindent 14 }}
       ports:
         - protocol: TCP
           port: 5432

@@ -32,8 +32,8 @@ func TestDeploymentTemplatesNameVariablesThisPackageReads(t *testing.T) {
 	}{
 		{"../../docker-compose.yml", composeEnvNames},
 		{"../../deploy/compose/compose.yaml", composeEnvNames},
-		{"../../deploy/unraid/kanban.xml", unraidEnvNames},
-		{"../../deploy/helm/kanban/templates/deployment.yaml", manifestEnvNames},
+		{"../../deploy/unraid/byge.xml", unraidEnvNames},
+		{"../../deploy/helm/byge/templates/deployment.yaml", manifestEnvNames},
 	} {
 		body, err := os.ReadFile(tc.file)
 		if err != nil {

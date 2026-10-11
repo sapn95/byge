@@ -91,7 +91,7 @@ still here for.
   compose becomes a choice rather than a prerequisite.
 - `go test ./...` exercises a real SQL backend without a service container, on
   a temporary file per subtest. Postgres stays in CI for what is Postgres.
-- The database is a file plus a WAL, so a backup is `kanban export` (Phase 5)
+- The database is a file plus a WAL, so a backup is `byge export` (Phase 5)
   or SQLite's own backup, never `cp` while the process is running.
 - The dialect in 0002 is now fixed in a schema: timestamps are RFC 3339 text
   with a fixed-width fraction so that they sort as instants, dates are

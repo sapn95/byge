@@ -1,10 +1,10 @@
-# kanban Helm chart
+# byge Helm chart
 
 Deploys the board and, depending on `storage`, a Postgres or a volume for it to
 use.
 
 ```sh
-helm install kanban ./deploy/helm/kanban
+helm install byge ./deploy/helm/byge
 ```
 
 ## Storage
@@ -22,7 +22,7 @@ this chart claims, so there is no second workload to operate, no init container
 waiting for it, and the board still survives the pod:
 
 ```sh
-helm install kanban ./deploy/helm/kanban \
+helm install byge ./deploy/helm/byge \
   --set storage=sqlite --set postgres.enabled=false
 ```
 
@@ -31,7 +31,7 @@ and is gone when it restarts, which makes it the fastest way to look at the app
 and the wrong way to keep anything:
 
 ```sh
-helm install kanban ./deploy/helm/kanban \
+helm install byge ./deploy/helm/byge \
   --set storage=memory --set postgres.enabled=false
 ```
 
@@ -48,7 +48,7 @@ string.
 `service.type` is `ClusterIP`, so by default you port-forward. For a NodePort:
 
 ```sh
-helm install kanban ./deploy/helm/kanban \
+helm install byge ./deploy/helm/byge \
   --set service.type=NodePort --set service.nodePort=30808
 ```
 
@@ -98,7 +98,7 @@ address only, and Cloudflare Access in front of the board does the same job
 without this sidecar at all.
 
 ```sh
-helm install kanban ./deploy/helm/kanban \
+helm install byge ./deploy/helm/byge \
   --set auth.enabled=true --set auth.provider=github \
   --set auth.github.org=my-org \
   --set auth.clientID=... --set auth.clientSecret=... \
@@ -197,7 +197,7 @@ Two limits worth knowing before you rely on the generated password:
 
 The app writes its own snapshots, so there is no sidecar and no CronJob, and the
 same file comes out of every backend: one JSON document holding every board,
-which `kanban import` reads back into a different deployment or a different
+which `byge import` reads back into a different deployment or a different
 storage backend. The format and what it leaves out is
 [`docs/adr/0012`](../../../docs/adr/0012-snapshots-are-the-portable-format.md).
 
@@ -206,10 +206,10 @@ refuses both at once because retention is one number, `backup.keep`:
 
 ```sh
 # A volume of its own, mounted at backup.dir.path
-helm upgrade kanban ./deploy/helm/kanban --set backup.dir.enabled=true
+helm upgrade byge ./deploy/helm/byge --set backup.dir.enabled=true
 
 # A bucket, or anything speaking enough of the protocol: MinIO, Garage, Ceph, B2
-helm upgrade kanban ./deploy/helm/kanban \
+helm upgrade byge ./deploy/helm/byge \
   --set backup.s3.bucket=kanban-snapshots \
   --set backup.s3.region=eu-central-2 \
   --set backup.s3.existingSecret=kanban-backup
@@ -237,7 +237,7 @@ existing claim, the path has to sit inside a volume the pod already has, which
 means a directory under `sqlite.path`'s and `storage: sqlite`:
 
 ```sh
-helm upgrade kanban ./deploy/helm/kanban \
+helm upgrade byge ./deploy/helm/byge \
   --set storage=sqlite --set postgres.enabled=false \
   --set backup.dir.enabled=true \
   --set backup.dir.persistence.enabled=false \

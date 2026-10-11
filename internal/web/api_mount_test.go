@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/api"
+	"byge/internal/api"
 )
 
 // The JSON API is mounted on this mux, so the two packages have to agree on

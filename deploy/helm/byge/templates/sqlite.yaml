@@ -2,8 +2,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "kanban.sqliteFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.sqliteFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
   annotations:
     {{- /* The board is this volume. Deleting it on uninstall would throw away
            the only copy of the data, which the bundled Postgres is careful not

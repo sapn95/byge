@@ -76,7 +76,7 @@ html.dark { color-scheme: dark; background-color: #020617; }
    rules decide whether the board is usable on a phone, and a rule that matters
    this much should be readable here rather than assembled from a dozen
    classes. */
-.kanban-scroller {
+.byge-scroller {
   display: flex;
   gap: 1rem;
   align-items: flex-start;
@@ -84,12 +84,12 @@ html.dark { color-scheme: dark; background-color: #020617; }
   scroll-snap-type: x mandatory;
   padding-bottom: 1rem;
 }
-.kanban-column {
+.byge-column {
   flex: 0 0 100%;
   scroll-snap-align: center;
   min-width: 0;
 }
-.kanban-cards {
+.byge-cards {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -108,15 +108,15 @@ html.dark { color-scheme: dark; background-color: #020617; }
     opacity: 0;
     transition: opacity .12s ease;
   }
-  .kanban-cards > div:hover .card-acts,
+  .byge-cards > div:hover .card-acts,
   .card-acts:focus-within {
     opacity: 1;
   }
 }
 @media (min-width: 640px) {
-  .kanban-scroller { gap: 1.25rem; }
-  .kanban-column { flex: 1 1 20rem; min-width: 20rem; }
-  .kanban-cards { padding-right: 0.5rem; }
+  .byge-scroller { gap: 1.25rem; }
+  .byge-column { flex: 1 1 20rem; min-width: 20rem; }
+  .byge-cards { padding-right: 0.5rem; }
 }
 
 /* The column strip on a phone. The columns already swipe, one to a screen, and
@@ -137,18 +137,18 @@ html.dark { color-scheme: dark; background-color: #020617; }
    For a board with few columns and many cards it turns a tall thin strip
    into something readable, and on a phone it is the same single file of
    cards it already was, without the horizontal swipe. */
-.kanban-scroller.rows {
+.byge-scroller.rows {
   flex-direction: column;
   overflow-x: visible;
   scroll-snap-type: none;
 }
-.kanban-scroller.rows .kanban-column {
+.byge-scroller.rows .byge-column {
   flex: 0 0 auto;
   width: 100%;
   min-width: 0;
   scroll-snap-align: none;
 }
-.kanban-scroller.rows .kanban-cards {
+.byge-scroller.rows .byge-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   /* A row grows to hold its cards. Capping it here would put a second

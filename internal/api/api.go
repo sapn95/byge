@@ -28,10 +28,10 @@ import (
 	"mime"
 	"net/http"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
 )
 
 // Prefix is where every route lives. The server mounts the handler here, so
@@ -45,13 +45,13 @@ const maxBody = 1 << 20
 
 // Server holds the handlers.
 type Server struct {
-	svc *service.Kanban
+	svc *service.Byge
 	log *slog.Logger
 }
 
 // New builds the JSON API handler. Every route it answers starts with Prefix,
 // so it can be mounted on a mux that serves the pages.
-func New(svc *service.Kanban, log *slog.Logger) http.Handler {
+func New(svc *service.Byge, log *slog.Logger) http.Handler {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"kanban/assets"
+	"byge/assets"
 )
 
 // jsCount is how much JavaScript this project wrote, for the footer.

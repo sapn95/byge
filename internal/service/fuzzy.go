@@ -5,7 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 // Typo tolerance for a search term, in single-letter edits.

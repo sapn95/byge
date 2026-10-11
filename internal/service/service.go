@@ -14,8 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/store"
 )
 
 // Limits on user input, in characters.
@@ -67,25 +67,25 @@ func (e *ValidationError) Error() string { return e.Field + ": " + e.Message }
 // guard below.
 func invalid(field, msg string) error { return &ValidationError{Field: field, Message: msg} }
 
-// Kanban is the application service.
-type Kanban struct {
+// Byge is the application service.
+type Byge struct {
 	store store.Store
 	now   func() time.Time
 	newID func() model.ID
 }
 
 // Option configures New.
-type Option func(*Kanban)
+type Option func(*Byge)
 
 // WithClock replaces time.Now; tests use it.
-func WithClock(now func() time.Time) Option { return func(k *Kanban) { k.now = now } }
+func WithClock(now func() time.Time) Option { return func(k *Byge) { k.now = now } }
 
 // WithIDs replaces the ID generator; tests use it.
-func WithIDs(newID func() model.ID) Option { return func(k *Kanban) { k.newID = newID } }
+func WithIDs(newID func() model.ID) Option { return func(k *Byge) { k.newID = newID } }
 
 // New wires the service to a store.
-func New(s store.Store, opts ...Option) *Kanban {
-	k := &Kanban{store: s, now: func() time.Time { return time.Now().UTC() }, newID: model.NewID}
+func New(s store.Store, opts ...Option) *Byge {
+	k := &Byge{store: s, now: func() time.Time { return time.Now().UTC() }, newID: model.NewID}
 	for _, o := range opts {
 		o(k)
 	}
@@ -187,24 +187,24 @@ func checkText(field, value string, max int, required bool) error {
 // --- boards -----------------------------------------------------------------
 
 // Boards returns every board, for the list and the switcher.
-func (k *Kanban) Boards(ctx context.Context) ([]model.Board, error) {
+func (k *Byge) Boards(ctx context.Context) ([]model.Board, error) {
 	return k.store.ListBoards(ctx)
 }
 
 // Board returns one board by slug, which is what a URL carries.
-func (k *Kanban) Board(ctx context.Context, slug string) (*model.Board, error) {
+func (k *Byge) Board(ctx context.Context, slug string) (*model.Board, error) {
 	return k.store.GetBoard(ctx, slug)
 }
 
 // BoardByID returns one board by id, which is what a card carries.
-func (k *Kanban) BoardByID(ctx context.Context, id model.ID) (*model.Board, error) {
+func (k *Byge) BoardByID(ctx context.Context, id model.ID) (*model.Board, error) {
 	return k.store.GetBoardByID(ctx, id)
 }
 
 // EnsureDefaultBoard creates the default board when the store has none and
 // returns the boards afterwards. serve calls it on start so that a fresh
 // database shows a usable board.
-func (k *Kanban) EnsureDefaultBoard(ctx context.Context) ([]model.Board, error) {
+func (k *Byge) EnsureDefaultBoard(ctx context.Context) ([]model.Board, error) {
 	boards, err := k.store.ListBoards(ctx)
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (k *Kanban) EnsureDefaultBoard(ctx context.Context) ([]model.Board, error) 
 
 // CreateBoard creates a board. An empty slug is derived from the name; an
 // empty column list means DefaultColumns.
-func (k *Kanban) CreateBoard(ctx context.Context, name, slug string, columns []string) (*model.Board, error) {
+func (k *Byge) CreateBoard(ctx context.Context, name, slug string, columns []string) (*model.Board, error) {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -274,7 +274,7 @@ func (k *Kanban) CreateBoard(ctx context.Context, name, slug string, columns []s
 }
 
 // RenameBoard changes name and slug.
-func (k *Kanban) RenameBoard(ctx context.Context, id model.ID, name, slug string) (*model.Board, error) {
+func (k *Byge) RenameBoard(ctx context.Context, id model.ID, name, slug string) (*model.Board, error) {
 	b, err := k.store.GetBoardByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func (k *Kanban) RenameBoard(ctx context.Context, id model.ID, name, slug string
 // SetBoardLayout changes how the board draws its columns. It is a property of
 // the board rather than of the viewer, because a board that reads better as
 // rows reads better as rows for everyone looking at it.
-func (k *Kanban) SetBoardLayout(ctx context.Context, id model.ID, layout string) error {
+func (k *Byge) SetBoardLayout(ctx context.Context, id model.ID, layout string) error {
 	switch layout {
 	case model.LayoutColumns, model.LayoutRows:
 	default:
@@ -322,7 +322,7 @@ func (k *Kanban) SetBoardLayout(ctx context.Context, id model.ID, layout string)
 // end before the start is refused for the same reason: SLA.Enabled would read
 // it as off, and a promise that silently stopped promising is worse than one
 // the form would not accept.
-func (k *Kanban) SetBoardSLA(ctx context.Context, id model.ID, sla model.SLA) error {
+func (k *Byge) SetBoardSLA(ctx context.Context, id model.ID, sla model.SLA) error {
 	if sla.ResponseHours < 0 || sla.ResponseHours > model.MaxResponseHours {
 		return invalid("response_hours", fmt.Sprintf("must be between 0 and %d", model.MaxResponseHours))
 	}
@@ -350,7 +350,7 @@ func (k *Kanban) SetBoardSLA(ctx context.Context, id model.ID, sla model.SLA) er
 
 // DeleteBoard removes a board and everything on it. Nothing brings it back, so
 // the confirmation belongs to whatever is calling.
-func (k *Kanban) DeleteBoard(ctx context.Context, id model.ID) error {
+func (k *Byge) DeleteBoard(ctx context.Context, id model.ID) error {
 	return k.store.DeleteBoard(ctx, id)
 }
 
@@ -358,7 +358,7 @@ func (k *Kanban) DeleteBoard(ctx context.Context, id model.ID) error {
 
 // AddColumn appends a column to a board, after checking its name and that a
 // negative WIP limit is not a limit.
-func (k *Kanban) AddColumn(ctx context.Context, boardID model.ID, name string, wipLimit int, stopsClock bool) (*model.Column, error) {
+func (k *Byge) AddColumn(ctx context.Context, boardID model.ID, name string, wipLimit int, stopsClock bool) (*model.Column, error) {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -376,7 +376,7 @@ func (k *Kanban) AddColumn(ctx context.Context, boardID model.ID, name string, w
 // UpdateColumn renames a column and sets its limit and whether it stops the
 // response clock. Lowering a limit below what the column already holds is
 // allowed: the cards are there, and refusing would leave nowhere to put them.
-func (k *Kanban) UpdateColumn(ctx context.Context, id model.ID, name string, wipLimit int, stopsClock bool) error {
+func (k *Byge) UpdateColumn(ctx context.Context, id model.ID, name string, wipLimit int, stopsClock bool) error {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return err
@@ -393,7 +393,7 @@ func (k *Kanban) UpdateColumn(ctx context.Context, id model.ID, name string, wip
 // The last column cannot go. A board without columns holds no cards and offers
 // nowhere to put one, so the delete would leave something that can only be
 // repaired through the database.
-func (k *Kanban) RemoveColumn(ctx context.Context, boardID, id, moveCardsTo model.ID) error {
+func (k *Byge) RemoveColumn(ctx context.Context, boardID, id, moveCardsTo model.ID) error {
 	b, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return err
@@ -412,7 +412,7 @@ func (k *Kanban) RemoveColumn(ctx context.Context, boardID, id, moveCardsTo mode
 
 // ReorderColumns sets a board's column order. The store checks that the order
 // names each column once, because only it can see the whole set.
-func (k *Kanban) ReorderColumns(ctx context.Context, boardID model.ID, order []model.ID) error {
+func (k *Byge) ReorderColumns(ctx context.Context, boardID model.ID, order []model.ID) error {
 	return k.store.ReorderColumns(ctx, boardID, order)
 }
 
@@ -433,7 +433,7 @@ type CardInput struct {
 
 // applyInput copies a form onto a card, checking every field as it goes. Shared
 // by create and update so a card cannot be made in a state an edit would refuse.
-func (k *Kanban) applyInput(c *model.Card, in CardInput) error {
+func (k *Byge) applyInput(c *model.Card, in CardInput) error {
 	if err := checkCardFields(in); err != nil {
 		return err
 	}
@@ -485,12 +485,12 @@ func (k *Kanban) applyInput(c *model.Card, in CardInput) error {
 }
 
 // Cards returns a board's cards, ordered by column then position.
-func (k *Kanban) Cards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
+func (k *Byge) Cards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
 	return k.store.ListCards(ctx, boardID)
 }
 
 // Card returns one card by id.
-func (k *Kanban) Card(ctx context.Context, id model.ID) (*model.Card, error) {
+func (k *Byge) Card(ctx context.Context, id model.ID) (*model.Card, error) {
 	return k.store.GetCard(ctx, id)
 }
 
@@ -504,7 +504,7 @@ func (k *Kanban) Card(ctx context.Context, id model.ID) (*model.Card, error) {
 // column must be within its limit. Refusing the second would leave an over-full
 // column frozen, unable even to have its own cards reordered, since a drag posts
 // the whole list and every card in it would read as an arrival.
-func (k *Kanban) wipRoom(ctx context.Context, board *model.Board, columnID model.ID, adding int, ignore map[model.ID]bool) error {
+func (k *Byge) wipRoom(ctx context.Context, board *model.Board, columnID model.ID, adding int, ignore map[model.ID]bool) error {
 	col := board.Column(columnID)
 	if col == nil {
 		return store.ErrNotFound
@@ -533,7 +533,7 @@ func (k *Kanban) wipRoom(ctx context.Context, board *model.Board, columnID model
 }
 
 // CreateCard appends a card to a column.
-func (k *Kanban) CreateCard(ctx context.Context, boardID, columnID model.ID, in CardInput) (*model.Card, error) {
+func (k *Byge) CreateCard(ctx context.Context, boardID, columnID model.ID, in CardInput) (*model.Card, error) {
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return nil, err
@@ -570,7 +570,7 @@ func (k *Kanban) CreateCard(ctx context.Context, boardID, columnID model.ID, in 
 // have, and two lines sharing one. Both are what a stale edit form posts when
 // somebody else has deleted a checklist line in the meantime, which is exactly
 // when the card must not be left somewhere new.
-func (k *Kanban) CheckCardInput(ctx context.Context, id model.ID, in CardInput) error {
+func (k *Byge) CheckCardInput(ctx context.Context, id model.ID, in CardInput) error {
 	if err := checkCardFields(in); err != nil {
 		return err
 	}
@@ -668,7 +668,7 @@ func checkCardFields(in CardInput) error {
 }
 
 // UpdateCard replaces a card's content; column and position are untouched.
-func (k *Kanban) UpdateCard(ctx context.Context, id model.ID, in CardInput) (*model.Card, error) {
+func (k *Byge) UpdateCard(ctx context.Context, id model.ID, in CardInput) (*model.Card, error) {
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
 		return nil, err
@@ -692,7 +692,7 @@ func (k *Kanban) UpdateCard(ctx context.Context, id model.ID, in CardInput) (*mo
 // would overwrite each other's titles. PatchCard below is what makes that true:
 // for a while this said it while reading the card and writing it back whole,
 // which is the thing it claims to avoid.
-func (k *Kanban) SetCardAssignee(ctx context.Context, id model.ID, assignee string) (*model.Card, error) {
+func (k *Byge) SetCardAssignee(ctx context.Context, id model.ID, assignee string) (*model.Card, error) {
 	assignee = strings.TrimSpace(assignee)
 	if err := checkText("assignee", assignee, MaxAssignee, false); err != nil {
 		return nil, err
@@ -720,7 +720,7 @@ func (k *Kanban) SetCardAssignee(ctx context.Context, id model.ID, assignee stri
 // Separate from UpdateCard for the same reason as SetCardAssignee: the picker
 // on the card face knows one field, and going through UpdateCard would mean
 // posting the title and the description back to keep them.
-func (k *Kanban) SetCardDueDate(ctx context.Context, id model.ID, due string) (*model.Card, error) {
+func (k *Byge) SetCardDueDate(ctx context.Context, id model.ID, due string) (*model.Card, error) {
 	date := time.Time{}
 	if due = strings.TrimSpace(due); due != "" {
 		d, err := ParseDueDate(due)
@@ -772,7 +772,7 @@ func (k *Kanban) SetCardDueDate(ctx context.Context, id model.ID, due string) (*
 // clock, which is right: work on a card is the card being attended to, and a
 // desk that looks idle while somebody is working through a checklist is a desk
 // whose badges say the wrong thing.
-func (k *Kanban) SetSubtaskDone(ctx context.Context, id, subtaskID model.ID, done bool) (*model.Card, error) {
+func (k *Byge) SetSubtaskDone(ctx context.Context, id, subtaskID model.ID, done bool) (*model.Card, error) {
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
 		return nil, err
@@ -800,7 +800,7 @@ func (k *Kanban) SetSubtaskDone(ctx context.Context, id, subtaskID model.ID, don
 //
 // The label has to belong to the card's own board. Nothing else checks that, so
 // a crafted id would otherwise attach another board's label to this one.
-func (k *Kanban) SetCardLabel(ctx context.Context, id, labelID model.ID, on bool) (*model.Card, error) {
+func (k *Byge) SetCardLabel(ctx context.Context, id, labelID model.ID, on bool) (*model.Card, error) {
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
 		return nil, err
@@ -873,7 +873,7 @@ func People(cards []model.Card, extra ...string) []string {
 //
 // An empty query returns the board unfiltered, so the search box can be wired
 // to the same handler as the board itself.
-func (k *Kanban) Search(ctx context.Context, boardID model.ID, q Query) ([]model.Card, error) {
+func (k *Byge) Search(ctx context.Context, boardID model.ID, q Query) ([]model.Card, error) {
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return nil, err
@@ -910,7 +910,7 @@ func (k *Kanban) Search(ctx context.Context, boardID model.ID, q Query) ([]model
 
 // ArchiveCard takes a card off the board. It keeps its column, position,
 // labels and subtasks, so RestoreCard puts back the same card.
-func (k *Kanban) ArchiveCard(ctx context.Context, id model.ID) error {
+func (k *Byge) ArchiveCard(ctx context.Context, id model.ID) error {
 	return k.store.SetCardArchived(ctx, id, k.now())
 }
 
@@ -920,23 +920,23 @@ func (k *Kanban) ArchiveCard(ctx context.Context, id model.ID) error {
 // work being started, and restoring is undoing a mistake; refusing it would
 // leave the card in the archive with nothing the user can do about it except
 // move something else first.
-func (k *Kanban) RestoreCard(ctx context.Context, id model.ID) error {
+func (k *Byge) RestoreCard(ctx context.Context, id model.ID) error {
 	return k.store.SetCardArchived(ctx, id, time.Time{})
 }
 
 // ArchivedCards returns a board's archived cards, most recently archived first.
-func (k *Kanban) ArchivedCards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
+func (k *Byge) ArchivedCards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
 	return k.store.ListArchivedCards(ctx, boardID)
 }
 
 // DeleteCard removes a card for good. Archiving is the reversible one.
-func (k *Kanban) DeleteCard(ctx context.Context, id model.ID) error {
+func (k *Byge) DeleteCard(ctx context.Context, id model.ID) error {
 	return k.store.DeleteCard(ctx, id)
 }
 
 // ReorderCards sets the authoritative order of one column, moving listed
 // cards in from other columns. It refuses to exceed the column's WIP limit.
-func (k *Kanban) ReorderCards(ctx context.Context, boardID, columnID model.ID, order []model.ID) error {
+func (k *Byge) ReorderCards(ctx context.Context, boardID, columnID model.ID, order []model.ID) error {
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return err
@@ -954,13 +954,13 @@ func (k *Kanban) ReorderCards(ctx context.Context, boardID, columnID model.ID, o
 // --- comments ---------------------------------------------------------------
 
 // Comments returns a card's thread, oldest first.
-func (k *Kanban) Comments(ctx context.Context, cardID model.ID) ([]model.Comment, error) {
+func (k *Byge) Comments(ctx context.Context, cardID model.ID) ([]model.Comment, error) {
 	return k.store.ListComments(ctx, cardID)
 }
 
 // CommentCounts returns how many comments each card of a board carries, for
 // the badge on the card face. Cards without any are absent from the map.
-func (k *Kanban) CommentCounts(ctx context.Context, boardID model.ID) (map[model.ID]int, error) {
+func (k *Byge) CommentCounts(ctx context.Context, boardID model.ID) (map[model.ID]int, error) {
 	return k.store.CountComments(ctx, boardID)
 }
 
@@ -977,7 +977,7 @@ func (k *Kanban) CommentCounts(ctx context.Context, boardID model.ID) (map[model
 // the person took succeeded, and answering them with an error would only get
 // the same comment posted twice. What it costs is an SLA badge that stays red
 // until the next edit.
-func (k *Kanban) AddComment(ctx context.Context, cardID model.ID, author, body string) (*model.Comment, error) {
+func (k *Byge) AddComment(ctx context.Context, cardID model.ID, author, body string) (*model.Comment, error) {
 	body = strings.TrimSpace(strings.ReplaceAll(body, "\r\n", "\n"))
 	if err := checkText("body", body, MaxComment, true); err != nil {
 		return nil, err
@@ -1012,7 +1012,7 @@ func (k *Kanban) AddComment(ctx context.Context, cardID model.ID, author, body s
 // It used to be handed the address alone, which is empty for a machine as well:
 // one service token could take back every comment another had left, and so
 // could any request at all on a board whose AUTH_REQUIRED is off.
-func (k *Kanban) DeleteComment(ctx context.Context, id model.ID, asker string) (*model.Comment, error) {
+func (k *Byge) DeleteComment(ctx context.Context, id model.ID, asker string) (*model.Comment, error) {
 	c, err := k.store.GetComment(ctx, id)
 	if err != nil {
 		return nil, err
@@ -1050,7 +1050,7 @@ func checkColor(color string) (string, error) {
 }
 
 // CreateLabel adds a label to a board, checking its name and its colour.
-func (k *Kanban) CreateLabel(ctx context.Context, boardID model.ID, name, color string) (*model.Label, error) {
+func (k *Byge) CreateLabel(ctx context.Context, boardID model.ID, name, color string) (*model.Label, error) {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -1067,7 +1067,7 @@ func (k *Kanban) CreateLabel(ctx context.Context, boardID model.ID, name, color 
 }
 
 // UpdateLabel renames a label or recolours it, on every card at once.
-func (k *Kanban) UpdateLabel(ctx context.Context, id model.ID, name, color string) error {
+func (k *Byge) UpdateLabel(ctx context.Context, id model.ID, name, color string) error {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return err
@@ -1080,7 +1080,7 @@ func (k *Kanban) UpdateLabel(ctx context.Context, id model.ID, name, color strin
 }
 
 // DeleteLabel removes a label from its board and from every card carrying it.
-func (k *Kanban) DeleteLabel(ctx context.Context, id model.ID) error {
+func (k *Byge) DeleteLabel(ctx context.Context, id model.ID) error {
 	return k.store.DeleteLabel(ctx, id)
 }
 
@@ -1115,7 +1115,7 @@ type BulkResult struct {
 // transactions can implement it, and a bulk operation that needed atomicity
 // would leak that requirement into every backend. Partial success is
 // reported instead of hidden.
-func (k *Kanban) Bulk(ctx context.Context, boardID model.ID, action BulkAction, ids []model.ID, target string) (BulkResult, error) {
+func (k *Byge) Bulk(ctx context.Context, boardID model.ID, action BulkAction, ids []model.ID, target string) (BulkResult, error) {
 	res := BulkResult{Failed: map[model.ID]error{}}
 	if len(ids) == 0 {
 		return res, invalid("ids", "no cards selected")

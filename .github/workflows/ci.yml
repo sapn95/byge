@@ -110,7 +110,7 @@ jobs:
           go-version-file: go.mod
       - name: go test
         env:
-          KANBAN_TEST_POSTGRES_URL: postgres://kanban:kanban@localhost:5432/kanban_test?sslmode=disable
+          BYGE_TEST_POSTGRES_URL: postgres://kanban:kanban@localhost:5432/kanban_test?sslmode=disable
         run: go test ./... -race -coverpkg=./... -coverprofile=coverage.out
       - name: coverage gate
         env:
@@ -121,7 +121,7 @@ jobs:
           echo "### coverage ${total}% (minimum ${MINIMUM}%)" >> "$GITHUB_STEP_SUMMARY"
           awk -v t="$total" -v m="$MINIMUM" 'BEGIN { exit (t + 0 < m + 0) }'
       - name: build
-        run: CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/kanban
+        run: CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/byge
 
   chart:
     name: helm chart
@@ -150,18 +150,18 @@ jobs:
           rm -rf "$tgz" sums linux-amd64
           helm version --short
       - name: helm lint
-        run: helm lint deploy/helm/kanban
+        run: helm lint deploy/helm/byge
       - name: every values combination the chart claims to support
         run: |
           set -euo pipefail
           ok() {
-            if ! helm template t deploy/helm/kanban "$@" >/dev/null 2>&1; then
+            if ! helm template t deploy/helm/byge "$@" >/dev/null 2>&1; then
               echo "::error::should render but does not: $*"
               exit 1
             fi
           }
           nope() {
-            if helm template t deploy/helm/kanban "$@" >/dev/null 2>&1; then
+            if helm template t deploy/helm/byge "$@" >/dev/null 2>&1; then
               echo "::error::should be rejected but renders: $*"
               exit 1
             fi
@@ -185,21 +185,21 @@ jobs:
           ok "${auth[@]}"
           # The sidecar establishes who the caller is; the app has to be told to
           # read it, or the board is anonymous behind a sign-in.
-          rendered="$(helm template t deploy/helm/kanban "${auth[@]}")"
+          rendered="$(helm template t deploy/helm/byge "${auth[@]}")"
           for expected in "name: AUTH_MODE" "value: proxy" "X-Forwarded-Email" "--pass-user-headers=true" '"--scope=openid email"'; do
             if ! grep -qF -- "$expected" <<<"$rendered"; then
               echo "::error::auth.enabled renders without $expected"
               exit 1
             fi
           done
-          if grep -qF -- "value: proxy" <<<"$(helm template t deploy/helm/kanban)"; then
+          if grep -qF -- "value: proxy" <<<"$(helm template t deploy/helm/byge)"; then
             echo "::error::AUTH_MODE=proxy is set without the sidecar that supplies the header"
             exit 1
           fi
           # The consent screen the operator has to sign off on is these scopes,
           # so what the chart asks for is asserted rather than inherited from
           # whatever oauth2-proxy defaults to this release.
-          github="$(helm template t deploy/helm/kanban "${auth[@]}" --set auth.provider=github)"
+          github="$(helm template t deploy/helm/byge "${auth[@]}" --set auth.provider=github)"
           if ! grep -qF -- '"--scope=user:email read:org"' <<<"$github"; then
             echo "::error::the github sign-in no longer asks for the scopes it needs to complete"
             exit 1
@@ -228,7 +228,7 @@ jobs:
           ok --set backup=null
           # Whichever target is configured has to reach the app as BACKUP_*, or
           # the chart has described a schedule that never runs.
-          snapshots="$(helm template t deploy/helm/kanban "${bucket[@]}")"
+          snapshots="$(helm template t deploy/helm/byge "${bucket[@]}")"
           for expected in "name: BACKUP_S3_BUCKET" "name: BACKUP_S3_REGION" "name: BACKUP_INTERVAL" \
                           "name: kanban-backup, key: access-key-id"; do
             if ! grep -qF -- "$expected" <<<"$snapshots"; then
@@ -236,7 +236,7 @@ jobs:
               exit 1
             fi
           done
-          if grep -qF -- "name: BACKUP_" <<<"$(helm template t deploy/helm/kanban)"; then
+          if grep -qF -- "name: BACKUP_" <<<"$(helm template t deploy/helm/byge)"; then
             echo "::error::the schedule is configured with no target to write to"
             exit 1
           fi
@@ -304,7 +304,7 @@ jobs:
           python3 - <<'PY'
           import sys, xml.etree.ElementTree as ET
 
-          root = ET.parse("deploy/unraid/kanban.xml").getroot()
+          root = ET.parse("deploy/unraid/byge.xml").getroot()
           bad = []
           if root.tag != "Container":
               bad.append(f"the root element is {root.tag}, not Container")
@@ -330,19 +330,19 @@ jobs:
                   bad.append(f"Config {name} has Type {config.get('Type')}")
           if bad:
               for line in bad:
-                  print(f"::error::deploy/unraid/kanban.xml: {line}")
+                  print(f"::error::deploy/unraid/byge.xml: {line}")
               sys.exit(1)
           print(f"the template parses, with {len(root.findall('Config'))} settings on the form")
           PY
       - name: one release version in every file that names one
         run: |
           set -euo pipefail
-          want="$(awk -F'"' '/^appVersion:/ {print $2}' deploy/helm/kanban/Chart.yaml)"
+          want="$(awk -F'"' '/^appVersion:/ {print $2}' deploy/helm/byge/Chart.yaml)"
           if [ -z "$want" ]; then
-            echo "::error::no appVersion in deploy/helm/kanban/Chart.yaml"
+            echo "::error::no appVersion in deploy/helm/byge/Chart.yaml"
             exit 1
           fi
-          pattern='(golang-kanban:|KANBAN_TAG[=:-]+)[0-9]+\.[0-9]+\.[0-9]+'
+          pattern='(golang-kanban:|BYGE_TAG[=:-]+)[0-9]+\.[0-9]+\.[0-9]+'
           # A grep that matches nothing exits 1, and under `set -e` that would end
           # the step before it could say what it found.
           found="$( { grep -rhoE "$pattern" deploy || true; grep -hoE "$pattern" readme.md || true; } \

@@ -3,8 +3,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "kanban.postgresFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.postgresFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
   annotations:
     helm.sh/resource-policy: keep
 spec:
@@ -20,31 +20,31 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "kanban.postgresFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.postgresFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
     - port: 5432
       targetPort: postgres
       name: postgres
-  selector: {{- include "kanban.postgresSelectorLabels" . | nindent 4 }}
+  selector: {{- include "byge.postgresSelectorLabels" . | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kanban.postgresFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.postgresFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
 spec:
   replicas: 1
   # One database, one volume: never run two of these against the same PVC.
   strategy:
     type: Recreate
   selector:
-    matchLabels: {{- include "kanban.postgresSelectorLabels" . | nindent 6 }}
+    matchLabels: {{- include "byge.postgresSelectorLabels" . | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "kanban.postgresSelectorLabels" . | nindent 8 }}
+      labels: {{- include "byge.postgresSelectorLabels" . | nindent 8 }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -71,7 +71,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kanban.postgresSecretName" . }}
+                  name: {{ include "byge.postgresSecretName" . }}
                   key: password
             # The image refuses to initialise into a non-empty mount point, and
             # a PVC arrives with lost+found on many storage classes.
@@ -96,7 +96,7 @@ spec:
         - name: data
           {{- if .Values.postgres.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ include "kanban.postgresFullname" . }}
+            claimName: {{ include "byge.postgresFullname" . }}
           {{- else }}
           emptyDir: {}
           {{- end }}

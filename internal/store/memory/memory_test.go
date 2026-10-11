@@ -3,8 +3,8 @@ package memory
 import (
 	"testing"
 
-	"kanban/internal/store"
-	"kanban/internal/store/storetest"
+	"byge/internal/store"
+	"byge/internal/store/storetest"
 )
 
 func TestContract(t *testing.T) {

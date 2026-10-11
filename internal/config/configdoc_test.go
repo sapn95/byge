@@ -78,7 +78,7 @@ The defaults below are what the process uses when the variable is unset. To see
 what one process actually read, ask it:
 
 ` + "```bash" + `
-kanban doctor
+byge doctor
 ` + "```" + `
 `
 

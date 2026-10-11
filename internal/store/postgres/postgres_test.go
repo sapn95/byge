@@ -9,23 +9,23 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
-	"kanban/internal/store/storetest"
+	"byge/internal/model"
+	"byge/internal/store"
+	"byge/internal/store/storetest"
 )
 
-// testDSN is read from KANBAN_TEST_POSTGRES_URL; tests are skipped without it.
+// testDSN is read from BYGE_TEST_POSTGRES_URL; tests are skipped without it.
 func testDSN(t *testing.T) string {
 	t.Helper()
-	dsn := os.Getenv("KANBAN_TEST_POSTGRES_URL")
+	dsn := os.Getenv("BYGE_TEST_POSTGRES_URL")
 	if dsn == "" {
-		t.Skip("KANBAN_TEST_POSTGRES_URL not set")
+		t.Skip("BYGE_TEST_POSTGRES_URL not set")
 	}
 	return dsn
 }
 
 // reset drops every table the schema owns. It refuses to touch a database whose
-// name does not end in _test, so a KANBAN_TEST_POSTGRES_URL that points at a
+// name does not end in _test, so a BYGE_TEST_POSTGRES_URL that points at a
 // development or staging database fails loudly instead of destroying it. The
 // table names are generic enough (cards, columns, labels, boards) to collide
 // with an unrelated schema, and CASCADE would take dependent objects with them.
@@ -36,7 +36,7 @@ func reset(t *testing.T, db *sql.DB) {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(name, "_test") {
-		t.Fatalf("refusing to drop tables in database %q: KANBAN_TEST_POSTGRES_URL must name a disposable database whose name ends in _test", name)
+		t.Fatalf("refusing to drop tables in database %q: BYGE_TEST_POSTGRES_URL must name a disposable database whose name ends in _test", name)
 	}
 	_, err := db.Exec(`DROP TABLE IF EXISTS comments, card_labels, subtasks, cards, labels, columns, boards, schema_migrations, cards_v1 CASCADE`)
 	if err != nil {

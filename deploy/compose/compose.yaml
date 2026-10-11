@@ -7,17 +7,17 @@
 #
 # The compose.yml in the repository root is the developer's setup: it builds the
 # image from the working tree. This one runs a released tag.
-name: kanban
+name: byge
 
 # What the three have in common. The image is distroless and runs as uid 65532,
 # so /data has to be a named volume or a host directory that uid can write to;
 # Docker gives a fresh named volume the ownership the image has, a bind mount
 # keeps whatever the host says.
-x-kanban: &kanban
-  image: ghcr.io/sapn95/golang-kanban:${KANBAN_TAG:-2.13.0}
+x-byge: &byge
+  image: ghcr.io/sapn95/byge:${BYGE_TAG:-2.13.0}
   restart: unless-stopped
   ports:
-    - "${KANBAN_PORT:-17808}:17808"
+    - "${BYGE_PORT:-17808}:17808"
   # The binary needs nothing outside /data, which is the same reason the Helm
   # chart sets readOnlyRootFilesystem.
   read_only: true
@@ -28,8 +28,8 @@ x-kanban: &kanban
 
 services:
   # A file on a volume and nothing to install. One process, one machine.
-  kanban-sqlite:
-    <<: *kanban
+  byge-sqlite:
+    <<: *byge
     profiles:
       - sqlite
     environment:
@@ -45,8 +45,8 @@ services:
       - kanban_data:/data
 
   # PostgreSQL, for more than one process or a board you expect to grow.
-  kanban-postgres:
-    <<: *kanban
+  byge-postgres:
+    <<: *byge
     profiles:
       - postgres
     environment:
@@ -81,7 +81,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      # kanban-postgres waits for this, so a first start does not spend its
+      # byge-postgres waits for this, so a first start does not spend its
       # retries on a database that is still initialising.
       test: ["CMD-SHELL", "pg_isready -U kanban -d kanban"]
       interval: 5s
@@ -89,8 +89,8 @@ services:
       retries: 10
 
   # A board to click through. Nothing is written anywhere.
-  kanban-demo:
-    <<: *kanban
+  byge-demo:
+    <<: *byge
     profiles:
       - demo
     restart: "no"

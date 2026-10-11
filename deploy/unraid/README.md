@@ -6,15 +6,15 @@ is not in Community Applications, so install it by hand, either way round:
 **Paste the URL.** Docker → Add Container → in the Template field put
 
 ```text
-https://raw.githubusercontent.com/sapn95/golang-kanban/homelab/deploy/unraid/kanban.xml
+https://raw.githubusercontent.com/sapn95/byge/homelab/deploy/unraid/byge.xml
 ```
 
 **Or copy the file.** Put it on the flash drive as
-`/boot/config/plugins/dockerMan/templates-user/my-kanban.xml`. It then shows up
+`/boot/config/plugins/dockerMan/templates-user/my-byge.xml`. It then shows up
 in the template list under `User templates` after a page reload.
 
 Either way the form comes up filled in: port 17808, `/data` on
-`/mnt/user/appdata/kanban`, SQLite, and a daily snapshot into
+`/mnt/user/appdata/byge`, SQLite, and a daily snapshot into
 `/data/snapshots`. Apply, and the board is on `http://<tower>:17808`.
 
 ## What the template sets that you would otherwise miss
@@ -29,7 +29,7 @@ It is a distroless image, so the Console button in the Unraid UI opens a
 terminal with nothing to run in it. The binary answers questions itself:
 
 ```bash
-docker exec kanban /kanban doctor
+docker exec byge /byge doctor
 ```
 
 That prints every variable the process read, passwords masked, then checks the
@@ -43,7 +43,7 @@ and keeps the last seven. They land in appdata, so an appdata backup covers
 them. Reading one back:
 
 ```bash
-docker exec -i kanban /kanban import -replace < /mnt/user/appdata/kanban/snapshots/kanban-20260909T161209Z.json
+docker exec -i kanban /byge import -replace < /mnt/user/appdata/byge/snapshots/kanban-20260909T161209Z.json
 ```
 
 ## PostgreSQL instead
@@ -58,5 +58,5 @@ The board itself does not authenticate, so anyone who reaches the port can
 change any card. On a LAN that is usually the point. Behind a reverse proxy that
 does authenticate, set `AUTH_MODE=proxy` and `AUTH_HEADER` to the header the
 proxy sets, and the board shows who did what. For an identity provider without a
-proxy in front, the [Helm chart](../helm/kanban) is the deployment that brings
+proxy in front, the [Helm chart](../helm/byge) is the deployment that brings
 one.

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/identity"
+	"byge/internal/identity"
 )
 
 const (

@@ -8,12 +8,12 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-    -o /kanban ./cmd/kanban
+    -o /byge ./cmd/byge
 
 FROM gcr.io/distroless/static-debian13:nonroot
-COPY --from=build /kanban /kanban
+COPY --from=build /byge /byge
 ENV SERVER_PORT=17808
 EXPOSE 17808
 VOLUME ["/data"]
-ENTRYPOINT ["/kanban"]
+ENTRYPOINT ["/byge"]
 CMD ["serve"]

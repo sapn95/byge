@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
 )
 
 // index is the front door. With exactly one board it redirects into it, because
@@ -27,7 +27,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/b/"+boards[0].Slug, http.StatusSeeOther)
 		return
 	}
-	s.render(w, s.pages["boards"], "layout", http.StatusOK, boardsPage{Title: "Kanban", User: identity.FromContext(r.Context()), Boards: boards})
+	s.render(w, s.pages["boards"], "layout", http.StatusOK, boardsPage{Title: "Byge", User: identity.FromContext(r.Context()), Boards: boards})
 }
 
 // boardList draws every board and the form that makes another.
@@ -70,7 +70,7 @@ func (s *Server) createBoard(w http.ResponseWriter, r *http.Request) {
 			if ve != nil {
 				msg = ve.Error()
 			}
-			s.render(w, s.pages["boards"], "layout", http.StatusBadRequest, boardsPage{Title: "Kanban", User: identity.FromContext(r.Context()), Boards: boards, Error: msg})
+			s.render(w, s.pages["boards"], "layout", http.StatusBadRequest, boardsPage{Title: "Byge", User: identity.FromContext(r.Context()), Boards: boards, Error: msg})
 			return
 		}
 		s.fail(w, r, err)

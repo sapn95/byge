@@ -28,7 +28,7 @@ somewhere that is not the machine the board runs on.
 ## Decision
 
 One document, `internal/backup`, written on top of `store.Store` and therefore
-once for every backend. `kanban export` writes it, `kanban import` reads it,
+once for every backend. `byge export` writes it, `byge import` reads it,
 and a schedule in the serving process writes it to a directory or a bucket on a
 timer.
 
@@ -74,7 +74,7 @@ protocol, and `BACKUP_DIR` at a directory for a deployment whose off-machine
 copy is somebody else's job. One target at a time, because two would need two
 retention policies and there is one `BACKUP_KEEP`.
 
-Names are `kanban-20260304T050607Z.json`, so lexical order is chronological
+Names are `byge-20260304T050607Z.json`, so lexical order is chronological
 order and retention needs to read no files. Retention runs after the write, so
 a target that will not let go of the old snapshots is an error beside a fresh
 one rather than a lost backup. The schedule takes a snapshot on start unless the
@@ -112,13 +112,13 @@ names so a deployment that already injects them does not need a second set.
 
 There is now a supported way to move a board between backends and between
 deployments, and it is the same file that lands in the bucket at midnight. It
-is also a way to lose a board: `kanban import -replace` deletes the boards it
+is also a way to lose a board: `byge import -replace` deletes the boards it
 is about to write, which is why an existing board without that flag is a
 refusal that names the flag, and why `-dry-run` reports what a file holds
 without touching the database.
 
 The file is every card, every comment and every assignee's address in plain
-text. `kanban export -o` writes `0600` and so does the directory target, but a
+text. `byge export -o` writes `0600` and so does the directory target, but a
 bucket is as private as its policy, and a snapshot in an S3 bucket that allows
 public reads is the whole board published.
 

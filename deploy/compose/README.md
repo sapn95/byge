@@ -21,7 +21,7 @@ stops it and leaves the volume alone.
 ## When it does not come up
 
 ```bash
-docker compose --profile sqlite exec kanban-sqlite /kanban doctor
+docker compose --profile sqlite exec byge-sqlite /byge doctor
 ```
 
 That prints every variable the process actually read, with the passwords masked,
@@ -37,13 +37,13 @@ as the database, which covers a bad import or a column deleted by mistake and no
 the loss of the volume. To copy them off the host:
 
 ```bash
-docker compose --profile sqlite cp kanban-sqlite:/data/snapshots ./snapshots
+docker compose --profile sqlite cp byge-sqlite:/data/snapshots ./snapshots
 ```
 
 To put one back, or to move a board to another machine:
 
 ```bash
-docker compose --profile sqlite exec -T kanban-sqlite /kanban import -replace < snapshot.json
+docker compose --profile sqlite exec -T byge-sqlite /byge import -replace < snapshot.json
 ```
 
 `BACKUP_INTERVAL=0` in `.env` turns the schedule off. A bucket instead of a
@@ -52,7 +52,7 @@ directory is `BACKUP_S3_BUCKET` and the variables around it, listed in the
 
 ## Upgrading
 
-Change `KANBAN_TAG` in `.env` and bring the profile up again. The schema is
+Change `BYGE_TAG` in `.env` and bring the profile up again. The schema is
 migrated on start.
 
 ```bash
@@ -64,7 +64,7 @@ docker compose --profile sqlite up -d
 Compose deploys the board on its own, so every request is anonymous and whoever
 reaches the port can change every board. Two ways out of that: put a proxy that
 authenticates in front of it and set `AUTH_MODE=proxy`, or use the
-[Helm chart](../helm/kanban), which brings an oauth2-proxy sidecar and the
+[Helm chart](../helm/byge), which brings an oauth2-proxy sidecar and the
 provider configuration with it.
 
 ## A directory instead of a volume
