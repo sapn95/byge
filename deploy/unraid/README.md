@@ -1,6 +1,6 @@
 # Unraid
 
-[`kanban.xml`](kanban.xml) is a container template for Unraid's Docker tab. It
+[`byge.xml`](byge.xml) is a container template for Unraid's Docker tab. It
 is not in Community Applications, so install it by hand, either way round:
 
 **Paste the URL.** Docker → Add Container → in the Template field put
@@ -34,7 +34,7 @@ docker exec byge /byge doctor
 
 That prints every variable the process read, passwords masked, then checks the
 store, the schema, the identity mode and the snapshot target. `docker logs
-kanban` is the other place to look.
+byge` is the other place to look.
 
 ## Snapshots
 
@@ -43,7 +43,7 @@ and keeps the last seven. They land in appdata, so an appdata backup covers
 them. Reading one back:
 
 ```bash
-docker exec -i kanban /byge import -replace < /mnt/user/appdata/byge/snapshots/kanban-20260909T161209Z.json
+docker exec -i byge /byge import -replace < /mnt/user/appdata/byge/snapshots/byge-20260909T161209Z.json
 ```
 
 ## PostgreSQL instead

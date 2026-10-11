@@ -342,7 +342,10 @@ jobs:
             echo "::error::no appVersion in deploy/helm/byge/Chart.yaml"
             exit 1
           fi
-          pattern='(golang-kanban:|BYGE_TAG[=:-]+)[0-9]+\.[0-9]+\.[0-9]+'
+          # byge: is the image this repository publishes; the old golang-kanban: is
+          # gone from deploy/ and the readme, and leaving it here would have left
+          # the image half of this check matching nothing at all.
+          pattern='(byge:|BYGE_TAG[=:-]+)[0-9]+\.[0-9]+\.[0-9]+'
           # A grep that matches nothing exits 1, and under `set -e` that would end
           # the step before it could say what it found.
           found="$( { grep -rhoE "$pattern" deploy || true; grep -hoE "$pattern" readme.md || true; } \
