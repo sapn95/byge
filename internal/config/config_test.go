@@ -288,7 +288,7 @@ func TestBackupTargets(t *testing.T) {
 		},
 		{
 			// The way to turn the schedule off without taking the target out of
-			// the deployment, so `kanban export` still knows where to write.
+			// the deployment, so `byge export` still knows where to write.
 			name: "interval 0 is no schedule",
 			env:  map[string]string{"BACKUP_DIR": "/data/snapshots", "BACKUP_INTERVAL": "0"},
 			check: func(t *testing.T, c Config) {

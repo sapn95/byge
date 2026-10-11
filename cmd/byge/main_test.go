@@ -38,7 +38,7 @@ func (s *syncBuf) String() string {
 
 func TestVersionHelpUnknown(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := run(context.Background(), []string{"version"}, env(nil), &out, &errOut); code != 0 || !strings.HasPrefix(out.String(), "kanban dev") {
+	if code := run(context.Background(), []string{"version"}, env(nil), &out, &errOut); code != 0 || !strings.HasPrefix(out.String(), "byge dev") {
 		t.Fatalf("version: %d %q", code, out.String())
 	}
 	out.Reset()

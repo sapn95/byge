@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
 )
 
 // settings renders the board's columns and labels. Neither could be edited

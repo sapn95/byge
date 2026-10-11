@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
 )
 
 // Options configures Import.
@@ -88,7 +88,7 @@ func Import(ctx context.Context, s store.Store, snap *Snapshot, opts Options) (R
 }
 
 // Check validates a snapshot and reports what importing it would write,
-// without touching the store. It is what `kanban import -dry-run` runs, so that
+// without touching the store. It is what `byge import -dry-run` runs, so that
 // a file can be looked over before a restore rather than after one.
 func Check(snap *Snapshot) (Report, error) {
 	var rep Report

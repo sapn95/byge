@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store/memory"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store/memory"
 )
 
 var today = time.Date(2026, 9, 9, 10, 0, 0, 0, time.UTC)
@@ -28,7 +28,7 @@ var today = time.Date(2026, 9, 9, 10, 0, 0, 0, time.UTC)
 type env struct {
 	t     *testing.T
 	h     http.Handler
-	svc   *service.Kanban
+	svc   *service.Byge
 	doc   *openAPIDoc
 	board *model.Board
 	card  *model.Card
@@ -706,7 +706,7 @@ func TestNoIdentityIsOneUser(t *testing.T) {
 	e.do("DELETE", "/api/v1/comments/"+created.str(t, "id"), "").want(t, 204)
 }
 
-// TestNewWithoutALoggerDoesNotPanic covers the nil the mount in cmd/kanban
+// TestNewWithoutALoggerDoesNotPanic covers the nil the mount in cmd/byge
 // could pass on a bad day.
 func TestNewWithoutALoggerDoesNotPanic(t *testing.T) {
 	h := New(service.New(memory.New()), nil)

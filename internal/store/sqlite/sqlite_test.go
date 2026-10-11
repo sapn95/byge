@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
-	"kanban/internal/store/storetest"
+	"byge/internal/model"
+	"byge/internal/store"
+	"byge/internal/store/storetest"
 )
 
 // fresh returns an empty database file without the schema applied. Every

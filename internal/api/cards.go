@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"slices"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
 )
 
 // A card is addressed by id, not through its board, because a card id is what a

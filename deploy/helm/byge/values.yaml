@@ -12,7 +12,7 @@ image:
   # The package this repository publishes. Upstream's own package,
   # ghcr.io/nicolashaas/golang-kanban, stops at 1.0.1 and predates everything
   # this chart configures.
-  repository: ghcr.io/sapn95/golang-kanban
+  repository: ghcr.io/sapn95/byge
   tag: ""          # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 
@@ -114,8 +114,8 @@ externalDatabase:
   existingSecretKey: url
 
 # Snapshots of every board, taken by the app itself and written somewhere else.
-# One JSON document per snapshot, the same one `kanban export` writes and
-# `kanban import` reads, on every storage backend; see docs/adr/0012.
+# One JSON document per snapshot, the same one `byge export` writes and
+# `byge import` reads, on every storage backend; see docs/adr/0012.
 #
 # A target is what turns the schedule on. With neither a directory nor a bucket
 # nothing is scheduled, and a backup is whatever you run yourself.

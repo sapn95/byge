@@ -1,17 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "kanban.fullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.fullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
       {{- /* The switch: auth on and the Service stops at the proxy. */}}
-      targetPort: {{ include "kanban.servicePortName" . }}
+      targetPort: {{ include "byge.servicePortName" . }}
       protocol: TCP
       name: http
       {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
       nodePort: {{ .Values.service.nodePort }}
       {{- end }}
-  selector: {{- include "kanban.selectorLabels" . | nindent 4 }}
+  selector: {{- include "byge.selectorLabels" . | nindent 4 }}

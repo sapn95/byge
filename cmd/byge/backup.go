@@ -10,19 +10,19 @@ import (
 	"os"
 	"time"
 
-	"kanban/internal/backup"
-	"kanban/internal/config"
-	"kanban/internal/store"
+	"byge/internal/backup"
+	"byge/internal/config"
+	"byge/internal/store"
 )
 
-// stdin is where `kanban import` reads a snapshot from when no file is named.
+// stdin is where `byge import` reads a snapshot from when no file is named.
 // A variable, so a test can pipe one in without writing it to disk first.
 var stdin io.Reader = os.Stdin
 
 // exportCmd writes a snapshot of the whole store.
 //
-//	kanban export             to stdout, so it can be piped or redirected
-//	kanban export -o file     to a file, 0o600
+//	byge export             to stdout, so it can be piped or redirected
+//	byge export -o file     to a file, 0o600
 func exportCmd(ctx context.Context, st store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -31,32 +31,32 @@ func exportCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 		return 2
 	}
 	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "kanban export: unexpected argument %q\n", fs.Arg(0))
+		_, _ = fmt.Fprintf(stderr, "byge export: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
 
 	snap, err := backup.Export(ctx, st)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban export: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "byge export: %v\n", err)
 		return 1
 	}
 	snap.Build = version
 	if *out == "" {
 		if err := backup.Write(stdout, snap); err != nil {
-			_, _ = fmt.Fprintf(stderr, "kanban export: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "byge export: %v\n", err)
 			return 1
 		}
 		return 0
 	}
 	body, err := backup.Bytes(snap)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban export: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "byge export: %v\n", err)
 		return 1
 	}
 	// 0o600: the file is every card on every board, including whatever people
 	// wrote in the comments.
 	if err := os.WriteFile(*out, body, 0o600); err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban export: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "byge export: %v\n", err)
 		return 1
 	}
 	rep, _ := backup.Check(snap)
@@ -66,10 +66,10 @@ func exportCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 
 // importCmd reads a snapshot back in.
 //
-//	kanban import file          refuses a board that is already there
-//	kanban import -replace f    overwrites those boards instead
-//	kanban import -dry-run f    checks the file and writes nothing
-//	kanban import               reads stdin
+//	byge import file          refuses a board that is already there
+//	byge import -replace f    overwrites those boards instead
+//	byge import -dry-run f    checks the file and writes nothing
+//	byge import               reads stdin
 func importCmd(ctx context.Context, st store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -79,7 +79,7 @@ func importCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 		return 2
 	}
 	if fs.NArg() > 1 {
-		_, _ = fmt.Fprintf(stderr, "kanban import: one file at a time, not %d\n", fs.NArg())
+		_, _ = fmt.Fprintf(stderr, "byge import: one file at a time, not %d\n", fs.NArg())
 		return 2
 	}
 
@@ -87,7 +87,7 @@ func importCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 	if path := fs.Arg(0); path != "" && path != "-" {
 		f, err := os.Open(path)
 		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "kanban import: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "byge import: %v\n", err)
 			return 1
 		}
 		defer func() { _ = f.Close() }()
@@ -95,14 +95,14 @@ func importCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 	}
 	snap, err := backup.Read(r)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban import: %s: %v\n", name, err)
+		_, _ = fmt.Fprintf(stderr, "byge import: %s: %v\n", name, err)
 		return 1
 	}
 
 	if *dry {
 		rep, err := backup.Check(snap)
 		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "kanban import: %s: %v\n", name, err)
+			_, _ = fmt.Fprintf(stderr, "byge import: %s: %v\n", name, err)
 			return 1
 		}
 		_, _ = fmt.Fprintf(stdout, "%s is a format %d snapshot taken %s: %s\n",
@@ -112,7 +112,7 @@ func importCmd(ctx context.Context, st store.Store, args []string, stdout, stder
 
 	rep, err := backup.Import(ctx, st, snap, backup.Options{Replace: *replace})
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban import: %s: %v\n", name, err)
+		_, _ = fmt.Fprintf(stderr, "byge import: %s: %v\n", name, err)
 		if errors.Is(err, backup.ErrExists) {
 			return 2
 		}

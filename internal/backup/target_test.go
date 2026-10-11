@@ -13,7 +13,7 @@ import (
 func TestNameRoundTrip(t *testing.T) {
 	at := time.Date(2026, 3, 4, 5, 6, 7, 890000000, time.UTC)
 	name := Name(at)
-	if name != "kanban-20260304T050607Z.json" {
+	if name != "byge-20260304T050607Z.json" {
 		t.Fatalf("Name = %q", name)
 	}
 	got, ok := TakenAt(name)
@@ -34,7 +34,7 @@ func TestNameRoundTrip(t *testing.T) {
 func TestTakenAtRefusesSomebodyElsesFile(t *testing.T) {
 	for _, name := range []string{
 		"", "kanban.json", "notes.txt", "kanban-.json",
-		"kanban-2026-03-04.json", "kanban-20260304T050607Z.json.gz",
+		"kanban-2026-03-04.json", "byge-20260304T050607Z.json.gz",
 		"dump-20260304T050607Z.json", "kanban-20261340T990607Z.json",
 	} {
 		if _, ok := TakenAt(name); ok {
@@ -126,7 +126,7 @@ func TestDirListIgnoresEverythingElse(t *testing.T) {
 	must(t, "put", dir.Put(ctx, name, []byte("{}")))
 	must(t, "other file", os.WriteFile(filepath.Join(dir.Path, "notes.txt"), []byte("mine"), 0o600))
 	must(t, "other file", os.WriteFile(filepath.Join(dir.Path, "kanban-old.json"), []byte("mine"), 0o600))
-	must(t, "subdirectory", os.Mkdir(filepath.Join(dir.Path, "kanban-20260304T050607Z.json.d"), 0o700))
+	must(t, "subdirectory", os.Mkdir(filepath.Join(dir.Path, "byge-20260304T050607Z.json.d"), 0o700))
 
 	names, err := dir.List(ctx)
 	must(t, "list", err)

@@ -6,8 +6,8 @@ package web
 import (
 	"net/http"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
+	"byge/internal/identity"
+	"byge/internal/model"
 )
 
 // addComment posts one comment and answers with it, plus the card face out of

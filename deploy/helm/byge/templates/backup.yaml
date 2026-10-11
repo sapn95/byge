@@ -1,4 +1,4 @@
-{{- include "kanban.validate" . -}}
+{{- include "byge.validate" . -}}
 {{- $backup := .Values.backup | default dict }}
 {{- $dir := $backup.dir | default dict }}
 {{- $s3 := $backup.s3 | default dict }}
@@ -7,8 +7,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "kanban.backupFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.backupFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
   annotations:
     {{- /* Kept on uninstall, like the SQLite claim. A backup volume that is
            deleted along with the release is a backup that is gone exactly when
@@ -30,8 +30,8 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{ include "kanban.backupFullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.backupFullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
   {{- /* No resource-policy: keep here. Both keys came from values, so the copy
          in the release is not the only one, and a key left behind after an
          uninstall is a credential nobody is watching. */}}

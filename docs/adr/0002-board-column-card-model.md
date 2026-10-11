@@ -185,7 +185,7 @@ same transaction. Postgres users get the usual advice in the release notes:
 - Column CRUD, WIP limits, and multiple boards are schema features from day
   one; Phase 2 is UI work only.
 - Existing Postgres data survives with the same visible content; IDs and the
-  table shape change once, under `AUTO_MIGRATE` or `kanban migrate`.
+  table shape change once, under `AUTO_MIGRATE` or `byge migrate`.
 - Labels, due dates, and subtasks are proper rows, so the JSON API in Phase 4
   and the snapshot format in Phase 5 do not have to parse a line format.
 - Users and board memberships (Phase 3) attach to `boards` with two tables

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
+	"byge/internal/model"
+	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
 // logs is a log a test can read while the schedule is still writing to it.

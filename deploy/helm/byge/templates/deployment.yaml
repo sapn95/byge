@@ -1,9 +1,9 @@
-{{- include "kanban.validate" . -}}
+{{- include "byge.validate" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kanban.fullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.fullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   {{- if eq .Values.storage "sqlite" }}
@@ -14,10 +14,10 @@ spec:
     type: Recreate
   {{- end }}
   selector:
-    matchLabels: {{- include "kanban.selectorLabels" . | nindent 6 }}
+    matchLabels: {{- include "byge.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "kanban.selectorLabels" . | nindent 8 }}
+      labels: {{- include "byge.selectorLabels" . | nindent 8 }}
       {{- /* No checksum/db-secret annotation. Re-rendering secret.yaml here
              evaluates the password helper a second time, so on a generated
              password the hash described a Secret that was never installed and
@@ -42,7 +42,7 @@ spec:
             - sh
             - -c
             - |
-              until pg_isready -h {{ include "kanban.postgresFullname" . }} -p 5432 -U {{ .Values.postgres.user | quote }} -d {{ .Values.postgres.database | quote }}; do
+              until pg_isready -h {{ include "byge.postgresFullname" . }} -p 5432 -U {{ .Values.postgres.user | quote }} -d {{ .Values.postgres.database | quote }}; do
                 echo "waiting for postgres"; sleep 2
               done
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
@@ -76,13 +76,13 @@ spec:
               valueFrom:
                 secretKeyRef:
                   {{- if .Values.postgres.enabled }}
-                  name: {{ include "kanban.postgresSecretName" . }}
+                  name: {{ include "byge.postgresSecretName" . }}
                   key: url
                   {{- else if .Values.externalDatabase.existingSecret }}
                   name: {{ .Values.externalDatabase.existingSecret }}
                   key: {{ .Values.externalDatabase.existingSecretKey }}
                   {{- else }}
-                  name: {{ include "kanban.fullname" . }}-db
+                  name: {{ include "byge.fullname" . }}-db
                   key: url
                   {{- end }}
             {{- end }}
@@ -120,7 +120,7 @@ spec:
             - name: BACKUP_DIR
               value: {{ $bdir.path | quote }}
             {{- else }}
-            {{- $bsec := include "kanban.backupSecretName" . }}
+            {{- $bsec := include "byge.backupSecretName" . }}
             - name: BACKUP_S3_BUCKET
               value: {{ $bs3.bucket | quote }}
             {{- with $bs3.prefix }}
@@ -166,15 +166,15 @@ spec:
             # The only writable path that survives the pod. fsGroup 65532 in
             # podSecurityContext is what lets the non-root user write to it.
             - name: data
-              mountPath: {{ include "kanban.sqliteDir" . | quote }}
+              mountPath: {{ include "byge.sqliteDir" . | quote }}
             {{- end }}
-            {{- if include "kanban.backupMountsAVolume" . }}
+            {{- if include "byge.backupMountsAVolume" . }}
             # Its own volume, so a snapshot outlives the volume it is a copy of.
             - name: backups
               mountPath: {{ .Values.backup.dir.path | quote }}
             {{- end }}
         {{- if (.Values.auth | default dict).enabled }}
-        {{- $sec := .Values.auth.existingSecret | default (include "kanban.authFullname" .) }}
+        {{- $sec := .Values.auth.existingSecret | default (include "byge.authFullname" .) }}
         - name: oauth2-proxy
           image: {{ .Values.auth.image | quote }}
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
@@ -199,7 +199,7 @@ spec:
             {{- end }}
             {{- /* One argument, spaces and all: --scope takes the whole list as
                    a single space-separated string. */}}
-            - {{ printf "--scope=%s" (include "kanban.authScopes" .) | quote }}
+            - {{ printf "--scope=%s" (include "byge.authScopes" .) | quote }}
             {{- range .Values.auth.emailDomains }}
             - --email-domain={{ . }}
             {{- end }}
@@ -267,12 +267,12 @@ spec:
         {{- if eq .Values.storage "sqlite" }}
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "kanban.sqliteFullname" . }}
+            claimName: {{ include "byge.sqliteFullname" . }}
         {{- end }}
-        {{- if include "kanban.backupMountsAVolume" . }}
+        {{- if include "byge.backupMountsAVolume" . }}
         - name: backups
           persistentVolumeClaim:
-            claimName: {{ .Values.backup.dir.persistence.existingClaim | default (include "kanban.backupFullname" .) }}
+            claimName: {{ .Values.backup.dir.persistence.existingClaim | default (include "byge.backupFullname" .) }}
         {{- end }}
         {{- if and (.Values.auth | default dict).enabled ((.Values.auth | default dict).tls | default dict).enabled }}
         - name: tls

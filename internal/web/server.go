@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"kanban/assets"
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
+	"byge/assets"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
 )
 
 //go:embed templates/*.html
@@ -27,7 +27,7 @@ var templateFiles embed.FS
 
 // Server is the HTTP front-end.
 type Server struct {
-	svc     *service.Kanban
+	svc     *service.Byge
 	ready   func(context.Context) error
 	log     *slog.Logger
 	now     func() time.Time
@@ -84,7 +84,7 @@ func WithViewers(people []identity.User) Option {
 func WithAPI(h http.Handler) Option { return func(s *Server) { s.api = h } }
 
 // New builds the handler. ready is called by /readyz; pass the store's Ping.
-func New(svc *service.Kanban, ready func(context.Context) error, log *slog.Logger, opts ...Option) http.Handler {
+func New(svc *service.Byge, ready func(context.Context) error, log *slog.Logger, opts ...Option) http.Handler {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}

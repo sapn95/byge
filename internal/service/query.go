@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 // Query is a parsed search. The zero Query matches every card on the board.

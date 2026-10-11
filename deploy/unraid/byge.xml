@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
   Unraid container template. Copy it to
-  /boot/config/plugins/dockerMan/templates-user/my-kanban.xml, or point Add
+  /boot/config/plugins/dockerMan/templates-user/my-byge.xml, or point Add
   Container at its raw URL; see the README beside this file.
 
   The image is distroless and has no shell, so the Console button in the Unraid
@@ -9,12 +9,12 @@
   /mnt/user/appdata, because the image's own user (65532) cannot write there.
 -->
 <Container version="2">
-  <Name>kanban</Name>
-  <Repository>ghcr.io/sapn95/golang-kanban:2.13.0</Repository>
-  <Registry>https://github.com/sapn95/golang-kanban/pkgs/container/golang-kanban</Registry>
-  <Project>https://github.com/sapn95/golang-kanban</Project>
-  <Support>https://github.com/sapn95/golang-kanban/issues</Support>
-  <Icon>https://raw.githubusercontent.com/sapn95/golang-kanban/homelab/assets/logo.svg</Icon>
+  <Name>byge</Name>
+  <Repository>ghcr.io/sapn95/byge:2.13.0</Repository>
+  <Registry>https://github.com/sapn95/byge/pkgs/container/byge</Registry>
+  <Project>https://github.com/sapn95/byge</Project>
+  <Support>https://github.com/sapn95/byge/issues</Support>
+  <Icon>https://raw.githubusercontent.com/sapn95/byge/homelab/assets/logo.svg</Icon>
   <Overview>
     A small Kanban board: boards with columns and WIP limits, cards with
     labels, due dates, assignees, checklists and comments, drag and drop,
@@ -26,7 +26,7 @@
     container instead, with DB_HOST and the DB_* variables below.&#13;
     &#13;
     Snapshots: with BACKUP_DIR set the server writes one JSON file with every
-    board on a timer and keeps the last BACKUP_KEEP of them. `kanban import`
+    board on a timer and keeps the last BACKUP_KEEP of them. `byge import`
     reads one back, on either backend.&#13;
     &#13;
     The board has no sign-in of its own: whoever reaches the port can change
@@ -34,7 +34,7 @@
     front of it and set AUTH_MODE=proxy.&#13;
     &#13;
     There is no shell in the image. To see what the container thinks its
-    configuration is, run: docker exec kanban /kanban doctor
+    configuration is, run: docker exec byge /byge doctor
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:17808]/</WebUI>
@@ -51,9 +51,9 @@
   <Config Name="WebUI Port" Target="17808" Default="17808" Mode="tcp"
           Description="The port the board listens on."
           Type="Port" Display="always" Required="true" Mask="false">17808</Config>
-  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/kanban" Mode="rw"
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/byge" Mode="rw"
           Description="Holds the SQLite file and the snapshots. Back this up."
-          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/kanban</Config>
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/byge</Config>
   <Config Name="Storage backend" Target="STORAGE" Default="sqlite"
           Description="sqlite, postgres or memory. memory keeps nothing."
           Type="Variable" Display="always" Required="true" Mask="false">sqlite</Config>

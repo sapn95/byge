@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
+	"byge/internal/model"
+	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
 // small is the least a snapshot can be and still import: one board, one column.

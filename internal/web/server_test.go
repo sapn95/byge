@@ -19,19 +19,19 @@ import (
 	"testing"
 	"time"
 
-	"kanban/assets"
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
+	"byge/assets"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
 var today = time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC)
 
 type env struct {
 	h     http.Handler
-	svc   *service.Kanban
+	svc   *service.Byge
 	board *model.Board
 	card  *model.Card
 	log   *bytes.Buffer
@@ -2258,7 +2258,7 @@ func TestBoardLayout(t *testing.T) {
 	t.Run("a board starts as columns", func(t *testing.T) {
 		e := seeded(t)
 		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-		if strings.Contains(body, `class="kanban-scroller rows"`) {
+		if strings.Contains(body, `class="byge-scroller rows"`) {
 			t.Error("a new board came up as rows")
 		}
 		// The button offers the layout it is not in.
@@ -2272,7 +2272,7 @@ func TestBoardLayout(t *testing.T) {
 		want(t, post(e, "/b/demo/layout", form("layout", "rows")), http.StatusSeeOther)
 
 		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-		if !strings.Contains(body, `class="kanban-scroller rows"`) {
+		if !strings.Contains(body, `class="byge-scroller rows"`) {
 			t.Error("the board did not come back as rows")
 		}
 		if !strings.Contains(body, `value="columns"`) {
@@ -2531,13 +2531,13 @@ func TestFooterIsOnEveryPage(t *testing.T) {
 	for _, path := range []string{"/", "/b/demo", "/b/demo/settings", "/b/demo/archive"} {
 		t.Run(path, func(t *testing.T) {
 			want(t, e.do(http.MethodGet, path, nil), http.StatusOK,
-				"<footer", `href="/"`, `href="/version"`, "kanban 2.2.1", "All boards")
+				"<footer", `href="/"`, `href="/version"`, "byge 2.2.1", "All boards")
 		})
 	}
 
 	t.Run("an unbuilt binary says dev rather than nothing", func(t *testing.T) {
 		e := seeded(t)
-		want(t, e.do(http.MethodGet, "/b/demo", nil), http.StatusOK, "kanban dev")
+		want(t, e.do(http.MethodGet, "/b/demo", nil), http.StatusOK, "byge dev")
 	})
 
 	t.Run("the API is linked only where it is mounted", func(t *testing.T) {
@@ -3336,14 +3336,14 @@ func TestServiceWorkerCacheNameFollowsTheBuild(t *testing.T) {
 	if strings.Contains(body, "__ASSET_VERSION__") {
 		t.Error("the worker went out with the marker still in it")
 	}
-	if !strings.Contains(body, "kanban-shell-"+contentVersion()) {
+	if !strings.Contains(body, "byge-shell-"+contentVersion()) {
 		t.Errorf("the cache is not named after the build:\n%s", body[:300])
 	}
 	// The digest has to cover the templates as well as the assets. The one
 	// thing the worker caches is the offline page, which is a template, so a
 	// release that changed only that page used to leave sw.js identical and the
 	// browser kept serving the old one.
-	if strings.Contains(body, "kanban-shell-"+assets.Version()) {
+	if strings.Contains(body, "byge-shell-"+assets.Version()) {
 		t.Error("the cache is named after the assets alone; a template-only release would not refresh it")
 	}
 }
@@ -3403,7 +3403,7 @@ func TestBulkSaysWhatItRefused(t *testing.T) {
 		t.Fatalf("got %d, want 204", rr.Code)
 	}
 	trigger := rr.Header().Get("HX-Trigger")
-	if !strings.Contains(trigger, "kanban:bulk-partial") {
+	if !strings.Contains(trigger, "byge:bulk-partial") {
 		t.Fatalf("HX-Trigger = %q; nothing told the page cards were refused", trigger)
 	}
 	if !strings.Contains(trigger, "could not be moved") {

@@ -57,7 +57,7 @@ and evaluated on read.
   `model.ParseDays`, `model.ParseClock`, `DaySet.Names()` and
   `model.ClockString`, so a day cannot mean Tuesday in a form and Wednesday in a
   script.
-- `cmd/kanban` imports `_ "time/tzdata"`. Without it `time.LoadLocation` falls
+- `cmd/byge` imports `_ "time/tzdata"`. Without it `time.LoadLocation` falls
   back to UTC on a host with no `/usr/share/zoneinfo`, which is most containers,
   and every badge would be an hour or two out with nothing on the page saying
   why. Half a megabyte to make the zone name mean what it says.

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/store"
 )
 
 // Store keeps everything in maps behind one mutex.

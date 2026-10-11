@@ -12,7 +12,7 @@ import (
 	"errors"
 	"time"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 // Sentinel errors. Backends wrap nothing else into these; callers use

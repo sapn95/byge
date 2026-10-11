@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/store"
 )
 
 // New returns a fresh, empty store for one subtest.

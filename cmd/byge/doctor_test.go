@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/backup"
+	"byge/internal/backup"
 )
 
 // doctorRun runs the command the way a container would and returns the report.
@@ -109,7 +109,7 @@ func TestDoctorReadsTheSchemaAndWritesNothing(t *testing.T) {
 	// With AUTO_MIGRATE off the hint points at the command instead.
 	e["AUTO_MIGRATE"] = "false"
 	_, out, _ := doctorRun(t, e)
-	if !strings.Contains(out, "run `kanban migrate`") {
+	if !strings.Contains(out, "run `byge migrate`") {
 		t.Errorf("no hint about the migrate command:\n%s", out)
 	}
 

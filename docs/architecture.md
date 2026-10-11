@@ -33,10 +33,10 @@ Numbers in brackets below point at them.
 
 ```text
 .
-├── cmd/kanban/            main(): parses the subcommand, wires config → store → service → http
+├── cmd/byge/            main(): parses the subcommand, wires config → store → service → http
 ├── assets/                vendored htmx, SortableJS, icons; compiled tailwind.css [0011]; embed.go
 ├── internal/
-│   ├── config/            Config struct, FromEnv(), Settings()/Redacted() for `kanban doctor`
+│   ├── config/            Config struct, FromEnv(), Settings()/Redacted() for `byge doctor`
 │   ├── model/             Board, Column, Card, Label, Subtask, ID — plain structs, no deps  [0002]
 │   │                      plus SLA and its office-hours clock, arithmetic on those structs [0013]
 │   ├── store/             Store interface, sentinel errors, migration runner                 [0003]
@@ -58,7 +58,7 @@ Everything above exists today; empty directories are not committed.
 ## Dependency direction
 
 ```text
-cmd/kanban ──► web ──► service ──► store (interface) ◄── store/postgres
+cmd/byge ──► web ──► service ──► store (interface) ◄── store/postgres
             ├► api ─┘      │         ▲                ◄── store/memory
             └► backup ───────────────┘                ◄── store/sqlite
                            ▼
@@ -72,9 +72,9 @@ cmd/kanban ──► web ──► service ──► store (interface) ◄──
   snapshot is the rows as they are, and a restore has to write a card that
   today's validation rules would refuse. It is written once for every backend
   for the same reason ([0012](adr/0012-snapshots-are-the-portable-format.md)).
-- Only `cmd/kanban` knows which backend is in use. It is the only place that
+- Only `cmd/byge` knows which backend is in use. It is the only place that
   imports `store/postgres`, `store/sqlite`, and so on. The same holds for the
-  backup target: `cmd/kanban` builds the directory or the bucket, and `backup`
+  backup target: `cmd/byge` builds the directory or the bucket, and `backup`
   only knows the `Target` interface.
 - There is no `store/mongo` and no `store/s3`. A bucket cannot give the
   interface a transaction or a unique slug, so S3 is where snapshots go rather
@@ -83,7 +83,7 @@ cmd/kanban ──► web ──► service ──► store (interface) ◄──
   request, call one service method, and render the result. The JSON API calls
   the same methods; that is what stops the two front-ends from drifting apart.
 - `web` mounts the JSON API as an `http.Handler` (`web.WithAPI`) and does not
-  import `api`. Only `cmd/kanban` builds both.
+  import `api`. Only `cmd/byge` builds both.
 
 ## Request flow (HTMX)
 
@@ -91,7 +91,7 @@ cmd/kanban ──► web ──► service ──► store (interface) ◄──
 browser ──► web.Router (net/http mux, Go 1.22 patterns)
                 │  parses path/form, resolves identity [0005]
                 ▼
-            service.Kanban.MoveCard(ctx, cardID, columnID, index)
+            service.Byge.MoveCard(ctx, cardID, columnID, index)
                 │  validates, checks WIP limit, stamps updated_at
                 ▼
             store.Store.ReorderCards(ctx, boardID, columnID, order)   ── one atomic operation
@@ -145,17 +145,17 @@ and the list of ids it posts.
 
 ## Command line
 
-`kanban` with no arguments behaves like today (`serve`), so the Dockerfile `CMD`
+`byge` with no arguments behaves like today (`serve`), so the Dockerfile `CMD`
 and the deployment templates need no command of their own.
 
 ```text
-kanban                 same as `kanban serve`
-kanban serve           run the HTTP server
-kanban migrate         apply pending migrations and exit
-kanban version         print version, commit, Go version
-kanban export          write a snapshot of every board to stdout or to -o file
-kanban import          read one back: -replace overwrites, -dry-run only checks
-kanban doctor          print the configuration and check what it points at
+kanban                 same as `byge serve`
+byge serve           run the HTTP server
+byge migrate         apply pending migrations and exit
+byge version         print version, commit, Go version
+byge export          write a snapshot of every board to stdout or to -o file
+byge import          read one back: -replace overwrites, -dry-run only checks
+byge doctor          print the configuration and check what it points at
 ```
 
 Subcommands use `flag` and a `switch`; no CLI library.
@@ -192,7 +192,7 @@ the `env` tags, the Notes column from the comment beside each field, the
 paragraphs from the comment above each group, and the defaults from `FromEnv` with
 an empty environment. A test renders it again and fails when the committed page
 differs, so a variable cannot arrive without its row. The same tags drive the
-`kanban doctor` report, which makes a new setting a tagged field and nothing
+`byge doctor` report, which makes a new setting a tagged field and nothing
 else.
 
 `internal/model/zones.go` is generated the same way, from the Go toolchain's
@@ -219,16 +219,16 @@ for steps that are easier in code than in SQL; the v1 data migration is one
 rename on SQLite, which has no conditional DDL. No migration library.
 
 `AUTO_MIGRATE=true` on start keeps `docker run` zero-setup. Operators who want
-control run `kanban migrate` in a job and set `AUTO_MIGRATE=false`.
+control run `byge migrate` in a job and set `AUTO_MIGRATE=false`.
 
 ## Observability
 
-- `log/slog`, one logger created in `cmd/kanban`, passed down. Request log
+- `log/slog`, one logger created in `cmd/byge`, passed down. Request log
   line per request: method, path, status, duration, remote IP.
 - `/healthz` and `/readyz` as above. The chart's liveness probe takes `/healthz`
   and the readiness probe `/readyz`, so a pod whose database has gone away leaves
   the service instead of being restarted in a loop.
-- `kanban doctor` for the questions a probe cannot answer: which variables
+- `byge doctor` for the questions a probe cannot answer: which variables
   arrived, whether the identity provider is reachable, whether snapshots are
   being written.
 - Metrics are out of scope until someone asks.
@@ -240,7 +240,7 @@ control run `kanban migrate` in a job and set `AUTO_MIGRATE=false`.
   file per subtest.
 - `store/storetest.Run(t, newStore)` is the contract suite. Every backend runs
   it; Postgres runs it in CI against a service container and is skipped when
-  `KANBAN_TEST_POSTGRES_URL` is unset.
+  `BYGE_TEST_POSTGRES_URL` is unset.
 - Handler tests use `httptest` against the real mux with the memory store.
 - `internal/backup` proves the round trip across every pair of backends: export,
   import into another store, export again, and the two documents are compared
@@ -260,7 +260,7 @@ control run `kanban migrate` in a job and set `AUTO_MIGRATE=false`.
 
 Three shapes, one image, and no special build for any of them:
 
-- [`deploy/helm/kanban`](../deploy/helm/kanban) for Kubernetes: a read-only root
+- [`deploy/helm/byge`](../deploy/helm/byge) for Kubernetes: a read-only root
   filesystem, an optional bundled PostgreSQL, a network policy, and an
   oauth2-proxy sidecar that gives `AUTH_MODE=proxy` a header it is allowed to
   trust ([0005](adr/0005-request-identity.md)).
@@ -272,8 +272,8 @@ Three shapes, one image, and no special build for any of them:
   `--user 99:100` because the image runs as uid 65532 and `/mnt/user/appdata`
   belongs to `nobody:users`.
 
-The image has no shell, so `kanban doctor` is a subcommand rather than a recipe
-in the readme: `docker exec kanban /kanban doctor` is the only way to ask a
+The image has no shell, so `byge doctor` is a subcommand rather than a recipe
+in the readme: `docker exec byge /byge doctor` is the only way to ask a
 running container what it read.
 
 None of this can be unit-tested, so CI checks what it can. The chart renders
@@ -324,5 +324,5 @@ setting that does nothing at all.
   `assets/tailwind.css` instead of working the classes out in the browser
   ([0011](adr/0011-tailwind-is-compiled.md)).
 - The port and the shape of the `docker run` one-liner. The image name in it
-  does change: this fork builds its own package, `ghcr.io/sapn95/golang-kanban`,
+  does change: this fork builds its own package, `ghcr.io/sapn95/byge`,
   because upstream's stops at 1.0.1.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/service"
+	"byge/internal/model"
+	"byge/internal/service"
 )
 
 // The types in this file are the wire format. They exist instead of putting

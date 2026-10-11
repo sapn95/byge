@@ -10,7 +10,7 @@
 // is reinstalled only when its own bytes change, and this file's did not
 // between releases, so the offline page stayed whatever it was the first time
 // it was cached: forever, across every later deploy.
-const SHELL = 'kanban-shell-__ASSET_VERSION__';
+const SHELL = 'byge-shell-__ASSET_VERSION__';
 const OFFLINE = '/offline';
 
 self.addEventListener('install', (e) => {

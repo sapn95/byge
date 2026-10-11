@@ -12,7 +12,7 @@ The defaults below are what the process uses when the variable is unset. To see
 what one process actually read, ask it:
 
 ```bash
-kanban doctor
+byge doctor
 ```
 
 Where the server listens. `LISTEN_ADDR` is a whole address, so it is also how you bind one interface instead of every one of them.
@@ -58,7 +58,7 @@ Who has a picture instead of initials, as address=github-login pairs. Unset mean
 |---|---|---|
 | `AVATARS` | *(unset)* | a pair that is not a pair is refused on start, not skipped |
 
-Where the scheduler puts snapshots and how often. Neither a directory nor a bucket means no schedule, and `kanban export` is then the only way a snapshot gets taken.
+Where the scheduler puts snapshots and how often. Neither a directory nor a bucket means no schedule, and `byge export` is then the only way a snapshot gets taken.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -82,6 +82,6 @@ What the process does on start, and how much it says while it runs.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AUTO_MIGRATE` | `true` | false: run `kanban migrate` yourself |
+| `AUTO_MIGRATE` | `true` | false: run `byge migrate` yourself |
 | `LOG_LEVEL` | `info` | debug \| info \| warn \| error |
 | `LOG_FORMAT` | `text` | text \| json |

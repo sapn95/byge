@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Kanban API",
+    "title": "Byge API",
     "version": "v1",
     "summary": "Read and change a board from a script.",
     "description": "Hand-written, not generated. Two tests hold it to the code: one fails when a route is registered and missing here or the other way round, one validates every handler response in the test suite against the schema below.\n\nThere are no tokens. The API grants what the board grants, which is everything to whoever can reach the port, so a deployment puts the same proxy or Cloudflare Access in front of it. Where identity is configured it is used for two things: \"@me\" as an assignee, and the author of a comment.\n\nA POST or PUT body must be application/json. Unknown fields are refused with a 400 that names the field, because \"titel\" for \"title\" would otherwise store a card with no title and nobody would find out until they read the board."

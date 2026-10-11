@@ -14,14 +14,14 @@ import (
 	// seed() sets a board's SLA, and the service checks the zone name with
 	// time.LoadLocation before it writes one. A host with no
 	// /usr/share/zoneinfo would fail the seed rather than the assertion, so
-	// the test binary carries the zone database the same way cmd/kanban does.
+	// the test binary carries the zone database the same way cmd/byge does.
 	_ "time/tzdata"
 
-	"kanban/internal/model"
-	"kanban/internal/service"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
-	"kanban/internal/store/sqlite"
+	"byge/internal/model"
+	"byge/internal/service"
+	"byge/internal/store"
+	"byge/internal/store/memory"
+	"byge/internal/store/sqlite"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/snapshot.json from what Export produces now")

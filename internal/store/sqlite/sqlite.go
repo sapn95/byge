@@ -15,8 +15,8 @@ import (
 
 	driver "modernc.org/sqlite"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
+	"byge/internal/model"
+	"byge/internal/store"
 )
 
 //go:embed migrations/*.sql

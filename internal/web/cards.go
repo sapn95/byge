@@ -11,9 +11,9 @@ import (
 	"slices"
 	"strings"
 
-	"kanban/internal/identity"
-	"kanban/internal/model"
-	"kanban/internal/service"
+	"byge/internal/identity"
+	"byge/internal/model"
+	"byge/internal/service"
 )
 
 // cardInput reads the fields a card form posts. Validation belongs to the
@@ -169,11 +169,11 @@ func (s *Server) bulkCards(w http.ResponseWriter, r *http.Request) {
 func bulkFailureTrigger(action service.BulkAction, res service.BulkResult) string {
 	msg := fmt.Sprintf("%d of %d cards could not be %s.",
 		len(res.Failed), len(res.Failed)+len(res.Changed), bulkVerbs[action])
-	b, err := json.Marshal(map[string]map[string]string{"kanban:bulk-partial": {"message": msg}})
+	b, err := json.Marshal(map[string]map[string]string{"byge:bulk-partial": {"message": msg}})
 	if err != nil {
 		// The only values here are a short string we built, so this cannot
 		// happen; an event with no detail still beats silence.
-		return "kanban:bulk-partial"
+		return "byge:bulk-partial"
 	}
 	return string(b)
 }

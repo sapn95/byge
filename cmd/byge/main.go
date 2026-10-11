@@ -2,11 +2,11 @@
 // Docker CMD and existing deployments keep working.
 //
 //	kanban [serve]    run the HTTP server
-//	kanban migrate    apply pending schema migrations and exit
-//	kanban export     write a snapshot of every board as JSON
-//	kanban import     read a snapshot back in
-//	kanban doctor     print the configuration and check what it points at
-//	kanban version    print the version
+//	byge migrate    apply pending schema migrations and exit
+//	byge export     write a snapshot of every board as JSON
+//	byge import     read a snapshot back in
+//	byge doctor     print the configuration and check what it points at
+//	byge version    print the version
 package main
 
 import (
@@ -29,15 +29,15 @@ import (
 	// says wherever the binary runs.
 	_ "time/tzdata"
 
-	"kanban/internal/api"
-	"kanban/internal/config"
-	"kanban/internal/identity"
-	"kanban/internal/service"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
-	"kanban/internal/store/postgres"
-	"kanban/internal/store/sqlite"
-	"kanban/internal/web"
+	"byge/internal/api"
+	"byge/internal/config"
+	"byge/internal/identity"
+	"byge/internal/service"
+	"byge/internal/store"
+	"byge/internal/store/memory"
+	"byge/internal/store/postgres"
+	"byge/internal/store/sqlite"
+	"byge/internal/web"
 )
 
 // Set with -ldflags "-X main.version=... -X main.commit=...".
@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, getenv config.Lookup, stdout, stder
 	}
 	switch cmd {
 	case "version", "-v", "--version":
-		_, _ = fmt.Fprintf(stdout, "kanban %s (%s, %s)\n", version, commit, runtime.Version())
+		_, _ = fmt.Fprintf(stdout, "byge %s (%s, %s)\n", version, commit, runtime.Version())
 		return 0
 	case "help", "-h", "--help":
 		usage(stdout)
@@ -95,14 +95,14 @@ func run(ctx context.Context, args []string, getenv config.Lookup, stdout, stder
 		return doctorCmd(ctx, args[1:], getenv, stdout, stderr)
 	case "serve", "migrate", "export", "import":
 	default:
-		_, _ = fmt.Fprintf(stderr, "kanban: unknown command %q\n", cmd)
+		_, _ = fmt.Fprintf(stderr, "byge: unknown command %q\n", cmd)
 		usage(stderr)
 		return 2
 	}
 
 	cfg, err := config.FromEnv(getenv)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "kanban: configuration: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "byge: configuration: %v\n", err)
 		return 2
 	}
 	log := cfg.Logger(stderr)

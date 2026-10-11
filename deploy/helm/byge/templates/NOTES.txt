@@ -1,4 +1,4 @@
-{{ include "kanban.fullname" . }} is installed with storage={{ .Values.storage }}.
+{{ include "byge.fullname" . }} is installed with storage={{ .Values.storage }}.
 
 {{- if eq .Values.storage "memory" }}
 
@@ -15,10 +15,10 @@ Reach it:
   http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
 {{- end }}
 {{- else if eq .Values.service.type "NodePort" }}
-  kubectl -n {{ .Release.Namespace }} get svc {{ include "kanban.fullname" . }} -o jsonpath='{.spec.ports[0].nodePort}'
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "byge.fullname" . }} -o jsonpath='{.spec.ports[0].nodePort}'
   then http://<node-ip>:<that-port>
 {{- else }}
-  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kanban.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "byge.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
   then http://localhost:{{ .Values.service.port }}
 {{- end }}
 

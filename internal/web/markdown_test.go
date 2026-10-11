@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/service"
+	"byge/internal/service"
 )
 
 // The renderer is the one place a string a user typed becomes markup, so these
@@ -67,13 +67,13 @@ func TestMarkdownRenders(t *testing.T) {
 		{"snake case survives", "the flag is auto_migrate_on", "<p>the flag is auto_migrate_on</p>"},
 		{"an underscore mid-word is not emphasis", "a_b_c", "<p>a_b_c</p>"},
 		{"an escape prints the character", `\*not emphasis\*`, "<p>*not emphasis*</p>"},
-		{"inline code", "run `kanban migrate` first", "<p>run <code>kanban migrate</code> first</p>"},
+		{"inline code", "run `byge migrate` first", "<p>run <code>byge migrate</code> first</p>"},
 		{"code is not markdown", "`**not bold**`", "<p><code>**not bold**</code></p>"},
 		{"a doubled fence holds a backtick", "`` a ` b ``", "<p><code>a ` b</code></p>"},
 		{
 			"a fenced block, language dropped",
-			"```sh\ngo build ./cmd/kanban\n```",
-			"<pre><code>go build ./cmd/kanban\n</code></pre>",
+			"```sh\ngo build ./cmd/byge\n```",
+			"<pre><code>go build ./cmd/byge\n</code></pre>",
 		},
 		{
 			"a fence that never closes ends with the description",

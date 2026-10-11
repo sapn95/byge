@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"kanban/internal/model"
+	"byge/internal/model"
 )
 
 // Default board created for imported v1 data and by the service on an empty

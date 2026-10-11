@@ -3,8 +3,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "kanban.fullname" . }}
-  labels: {{- include "kanban.labels" . | nindent 4 }}
+  name: {{ include "byge.fullname" . }}
+  labels: {{- include "byge.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations: {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -26,7 +26,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "kanban.fullname" $ }}
+                name: {{ include "byge.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

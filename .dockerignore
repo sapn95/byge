@@ -5,7 +5,7 @@
 .dockerignore
 
 # Local build and test output; a host-built binary must never reach the image.
-/kanban
+/byge
 coverage.out
 
 # The CSS is compiled and committed, so the image needs neither the compiler

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/backup"
-	"kanban/internal/config"
-	"kanban/internal/store/memory"
+	"byge/internal/backup"
+	"byge/internal/config"
+	"byge/internal/store/memory"
 )
 
 // snapshotFile writes a small snapshot and returns its path. It is built here
@@ -265,7 +265,7 @@ func TestExportImportRefuseWhatTheyCannotDo(t *testing.T) {
 	}{
 		{"export with an unknown flag", []string{"export", "-bogus"}, 2, "flag provided but not defined"},
 		{"export with an argument", []string{"export", "everything"}, 2, "unexpected argument"},
-		{"export into a directory that is not there", []string{"export", "-o", filepath.Join(t.TempDir(), "nope", "x.json")}, 1, "kanban export"},
+		{"export into a directory that is not there", []string{"export", "-o", filepath.Join(t.TempDir(), "nope", "x.json")}, 1, "byge export"},
 		{"import with an unknown flag", []string{"import", "-bogus"}, 2, "flag provided but not defined"},
 		{"import of two files", []string{"import", "a.json", "b.json"}, 2, "one file at a time"},
 		{"import of a file that is not there", []string{"import", filepath.Join(t.TempDir(), "gone.json")}, 1, "no such file"},

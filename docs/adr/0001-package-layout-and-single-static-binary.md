@@ -19,7 +19,7 @@ layer the two front-ends share, and a binary that runs the same everywhere.
 ## Decision
 
 1. Split the code into the packages described in
-   [`docs/architecture.md`](../architecture.md): `cmd/kanban`, `assets`,
+   [`docs/architecture.md`](../architecture.md): `cmd/byge`, `assets`,
    `internal/{config,model,store,service,web}` now; `api`, `auth`, `backup`
    when their phase starts.
 2. Keep the web layer on the standard library: `net/http` with Go 1.22 method
@@ -30,7 +30,7 @@ layer the two front-ends share, and a binary that runs the same everywhere.
    No runtime CDN.
 4. Build with `CGO_ENABLED=0`. Backends must be pure Go (`modernc.org/sqlite`
    in Phase 1, not `mattn/go-sqlite3`). Final image is distroless, non-root.
-5. `kanban` grows subcommands (`serve`, `migrate`, `version`). No arguments
+5. `byge` grows subcommands (`serve`, `migrate`, `version`). No arguments
    means `serve`, so existing deployments keep working.
 6. Every new Go module dependency is justified in an ADR. Phase 0 adds none;
    `go mod tidy` removes one (`godotenv`, unused).

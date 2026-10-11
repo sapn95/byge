@@ -26,7 +26,7 @@ bookmark.
 ## Decision
 
 A second surface, `internal/api`, under `/api/v1/`, over the same
-`service.Kanban`.
+`service.Byge`.
 
 It is a package and not a set of handlers in `internal/web` because the two
 translate in opposite directions: one renders HTML for a browser, the other

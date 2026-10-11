@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"kanban/assets"
-	"kanban/internal/identity"
+	"byge/assets"
+	"byge/internal/identity"
 )
 
 // buildInfo says which build is answering.
@@ -37,7 +37,7 @@ func (s *Server) buildInfo(w http.ResponseWriter, r *http.Request) {
 	if commit == "" {
 		commit = "unknown"
 	}
-	plain(w, http.StatusOK, fmt.Sprintf("kanban %s (commit %s)\n", version, commit))
+	plain(w, http.StatusOK, fmt.Sprintf("byge %s (commit %s)\n", version, commit))
 }
 
 // readyz says whether the database answers. Distinct from healthz on purpose: a

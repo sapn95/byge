@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/service"
+	"byge/internal/model"
+	"byge/internal/service"
 )
 
 // openapi.json is hand-written, and a hand-written contract nobody checks

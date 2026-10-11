@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"kanban/internal/backup"
-	"kanban/internal/config"
-	"kanban/internal/store"
+	"byge/internal/backup"
+	"byge/internal/config"
+	"byge/internal/store"
 )
 
 // doctorHTTP fetches the Access key set. A variable so a test can answer for
@@ -57,7 +57,7 @@ type doctor struct {
 // otherwise only fail once the process is running: the store, the schema, the
 // identity provider and the backup target.
 //
-//	kanban doctor [-timeout 10s]
+//	byge doctor [-timeout 10s]
 //
 // It is the command to run inside the container when the board does not come up,
 // which is why it takes no configuration of its own and reads the same
@@ -70,11 +70,11 @@ func doctorCmd(ctx context.Context, args []string, getenv config.Lookup, stdout,
 		return 2
 	}
 	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "kanban doctor: unexpected argument %q\n", fs.Arg(0))
+		_, _ = fmt.Fprintf(stderr, "byge doctor: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
 	if *timeout <= 0 {
-		_, _ = fmt.Fprintf(stderr, "kanban doctor: -timeout must be positive, got %s\n", *timeout)
+		_, _ = fmt.Fprintf(stderr, "byge doctor: -timeout must be positive, got %s\n", *timeout)
 		return 2
 	}
 
@@ -183,7 +183,7 @@ func (d *doctor) schema(ctx context.Context, st store.Store) {
 	defer cancel()
 	boards, err := st.ListBoards(listCtx)
 	if err != nil {
-		hint := "run `kanban migrate`"
+		hint := "run `byge migrate`"
 		if d.cfg.AutoMigrate {
 			// AUTO_MIGRATE is on, so serve would have created the schema.
 			// Doctor deliberately does not: a read-only diagnostic that writes
@@ -301,7 +301,7 @@ func (d *doctor) backup(ctx context.Context) {
 		return
 	}
 	if target == nil {
-		d.add(statusOff, "backup", "no target: set BACKUP_DIR or BACKUP_S3_BUCKET, or take one yourself with `kanban export`")
+		d.add(statusOff, "backup", "no target: set BACKUP_DIR or BACKUP_S3_BUCKET, or take one yourself with `byge export`")
 		return
 	}
 	// A directory that cannot be written to is a failure the schedule would
@@ -399,7 +399,7 @@ func probeDir(path string) error {
 // something failed. A warning is a deployment somebody chose.
 func (d *doctor) report(w io.Writer) int {
 	var b strings.Builder
-	fmt.Fprintf(&b, "kanban %s (%s, %s)\n\n", version, commit, runtime.Version())
+	fmt.Fprintf(&b, "byge %s (%s, %s)\n\n", version, commit, runtime.Version())
 
 	settings := d.cfg.Settings()
 	width := 0

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"kanban/assets"
+	"byge/assets"
 )
 
 func TestCountLines(t *testing.T) {

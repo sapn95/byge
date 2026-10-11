@@ -125,11 +125,11 @@
 <!-- On a phone one column fills the screen and the scroller snaps to it, so a
      swipe lands on a column rather than between two. shrink-0 is what stops
      flex from squeezing three columns into one screen width. -->
-<div class="kanban-scroller{{if .Rows}} rows{{end}}">
+<div class="byge-scroller{{if .Rows}} rows{{end}}">
   {{range .Columns}}
-  <div class="kanban-column bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none p-4 sm:p-5">
+  <div class="byge-column bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none p-4 sm:p-5">
     {{template "columnhead" .}}
-    <div id="cards-{{.Column.ID}}" data-column="{{.Column.ID}}" class="kanban-cards">
+    <div id="cards-{{.Column.ID}}" data-column="{{.Column.ID}}" class="byge-cards">
       {{range .Cards}}{{template "card" .}}{{end}}
       <!-- Inside the drop area, not under it: the area keeps a minimum height so
            there is something to drop onto, and a message below that left the

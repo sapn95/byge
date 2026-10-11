@@ -1,5 +1,24 @@
-## Simple Kanban Board
-A no-nonsense, lightweight Kanban board built with Golang and HTMX. I couldn’t find a reasonable self-hosted Kanban board that wasn’t using some JavaScript monstrosity like Node or Next.js, I don't need the next [9.1 CVE](https://github.com/advisories/GHSA-f82v-jwr5-mffw) on my server — so I decided to build my own. This project is my sweet little solution to manage tasks simply while learning and sharing a project with the community.
+## byge
+A self-hosted kanban board. One static Go binary, HTMX for the browser, no Node
+anywhere.
+
+*Byge* is Bernese German for a stack, and *byge* is the verb for stacking it. A
+column is a stack of cards, so the name is also the instruction.
+([berndeutsch.ch](https://www.berndeutsch.ch/words/11313))
+
+### This is a fork
+It began as a fork of [NicolasHaas/golang-kanban](https://github.com/NicolasHaas/golang-kanban)
+at its v1.0.1, which was one Postgres table of cards under three fixed columns.
+The boards, columns, labels, comments, archive, search, response times,
+identity, JSON API and SQLite backend all came after that, and so did the
+rename.
+
+Upstream has gone its own way since. Its `v2` branch has multiple boards too,
+written from scratch on a flat layout: the last commit the two histories share
+is `87b0032`, v1.0.1 from July 2025, and of the files they both still carry,
+eight are build configuration and none is Go source or a template. There is no
+rebase or merge left between them in either direction, so anything worth having
+from upstream is ported by hand and credited in its commit.
 
 ### Overview
 Backend: Go, standard library `net/http`, one static binary with everything embedded.
@@ -61,7 +80,7 @@ Database: SQLite or PostgreSQL. SQLite is a file, needs nothing installed, and i
   columns. It calls the same code the pages call, and the contract is
   [`openapi.json`](internal/api/openapi.json), served at
   `/api/v1/openapi.json`; see [docs/adr/0009](docs/adr/0009-json-api.md).
-- `kanban export` writes every board to one JSON file and `kanban import` reads
+- `byge export` writes every board to one JSON file and `byge import` reads
   it back, on any backend, so a board moves from the SQLite file on your laptop
   into the PostgreSQL in your cluster without SQL. With `BACKUP_DIR` or
   `BACKUP_S3_BUCKET` set, the server writes the same file on a timer and keeps
@@ -117,17 +136,17 @@ The image is built for linux/amd64 and linux/arm64 with a provenance
 attestation, so it runs on a laptop and on a Raspberry Pi from the same tag.
 
 ``` bash
-docker pull ghcr.io/sapn95/golang-kanban:2.13.0
+docker pull ghcr.io/sapn95/byge:2.13.0
 
 # SQLite: one volume, no database to set up
-docker run -p 17808:17808 -e STORAGE=sqlite -v kanban:/data ghcr.io/sapn95/golang-kanban:2.13.0
+docker run -p 17808:17808 -e STORAGE=sqlite -v kanban:/data ghcr.io/sapn95/byge:2.13.0
 
 # PostgreSQL
-docker run -p 17808:17808 -e DB_HOST=your-postgres -e DB_USER=... -e DB_PASS=... ghcr.io/sapn95/golang-kanban:2.13.0
+docker run -p 17808:17808 -e DB_HOST=your-postgres -e DB_USER=... -e DB_PASS=... ghcr.io/sapn95/byge:2.13.0
 ```
 
 ### On Unraid
-[`deploy/unraid/kanban.xml`](deploy/unraid/kanban.xml) is a template for the
+[`deploy/unraid/byge.xml`](deploy/unraid/byge.xml) is a template for the
 Docker tab. It is not in Community Applications, so install it by hand: paste its
 raw URL into the Template field, or copy the file to
 `/boot/config/plugins/dockerMan/templates-user/`. The form then comes up with the
@@ -136,14 +155,14 @@ port, `/data` on appdata, SQLite and a daily snapshot already filled in. The
 sign-in.
 
 ### In Kubernetes
-[`deploy/helm/kanban`](deploy/helm/kanban) is a chart with a read-only root
+[`deploy/helm/byge`](deploy/helm/byge) is a chart with a read-only root
 filesystem, an optional PostgreSQL, a network policy, and an oauth2-proxy sidecar
 that puts Entra, GitHub or any OIDC provider in front of the board.
 
 ### Prerequisites
 With `STORAGE=sqlite` there are none: point `SQLITE_PATH` at a file in a writable directory (`/data` in the image) and the tables are created on first start. One process on one machine, and writes are serialised, which is plenty for a small team; see [docs/adr/0004](docs/adr/0004-sqlite-backend.md) for what that rules out.
 
-PostgreSQL is the external dependency if you pick it. Create a database and a user that owns it; the tables are created by the app on first start (or with `kanban migrate`).
+PostgreSQL is the external dependency if you pick it. Create a database and a user that owns it; the tables are created by the app on first start (or with `byge migrate`).
 
 ``` sql
 CREATE USER kanban WITH PASSWORD 'your_password_here';
@@ -169,7 +188,7 @@ DB_HOST=postgres
 DB_PORT=5432
 DB_NAME=kanban
 DB_SSLMODE=disable
-AUTO_MIGRATE=true          # false: run `kanban migrate` yourself
+AUTO_MIGRATE=true          # false: run `byge migrate` yourself
 LOG_LEVEL=info             # debug | info | warn | error
 LOG_FORMAT=text            # text | json
 
@@ -191,7 +210,7 @@ AUTH_VIEWERS=Ada Lovelace <ada@example.com>, grace@example.com
 AVATARS=me@example.com=octocat,1+other@users.noreply.github.com=other
 
 # Scheduled snapshots. Set a directory or a bucket, not both; with neither, the
-# server takes no backups and `kanban export` is how you get one.
+# server takes no backups and `byge export` is how you get one.
 BACKUP_INTERVAL=24h        # 0 turns the schedule off; under a minute is refused
 BACKUP_KEEP=7              # older snapshots are deleted after a successful write; 0 keeps all
 BACKUP_DIR=                # e.g. /data/snapshots, on a volume that outlives the container
@@ -204,7 +223,7 @@ AWS_SECRET_ACCESS_KEY=
 AWS_SESSION_TOKEN=         # only for temporary credentials
 ```
 
-`kanban` with no arguments serves; `kanban migrate` applies migrations and exits; `kanban doctor` reports the configuration, below; `kanban version` prints the version; `kanban export` and `kanban import` are further down. `/healthz` says the process is up, `/readyz` says the database answers, and `/version` says which build is answering — which is how you find out whether a deploy actually landed, without fetching a page and looking for markup only the new version renders.
+`byge` with no arguments serves; `byge migrate` applies migrations and exits; `byge doctor` reports the configuration, below; `byge version` prints the version; `byge export` and `byge import` are further down. `/healthz` says the process is up, `/readyz` says the database answers, and `/version` says which build is answering — which is how you find out whether a deploy actually landed, without fetching a page and looking for markup only the new version renders.
 
 `AUTH_VIEWERS` is the answer to "who else can read this". A board behind a
 sign-in knows who is at the keyboard and nothing about who else was let in, so
@@ -221,19 +240,19 @@ any deployment that also publishes a LAN port beside the tunnel. `AUTH_REQUIRED=
 closes it: anything with no identity gets a `403`, except `/healthz` and
 `/readyz`, which a kubelet has to be able to reach. `/version` goes behind it
 with everything else, so the way to read a build off a running deployment
-becomes the footer on the board or `kanban version` in the container. It needs
+becomes the footer on the board or `byge version` in the container. It needs
 `AUTH_MODE=proxy` or `access`, and the trade is that a key rotation the app
 cannot follow now refuses the page rather than drawing it signed out.
 
 ### When it does not come up
 
-`kanban doctor` prints the configuration the process actually read, with the
+`byge doctor` prints the configuration the process actually read, with the
 passwords masked, and then tries the things a deployment gets wrong: the store,
 the schema, the identity mode, the avatar pairs and the backup target. It writes
 nothing, so it is safe against a running deployment.
 
 ``` bash
-docker exec kanban /kanban doctor      # there is no shell in the image
+docker exec byge /byge doctor      # there is no shell in the image
 ```
 
 ``` text
@@ -287,12 +306,12 @@ about it before the card exists.
 ### Backups and moving a board
 
 ``` bash
-kanban export -o board.json          # every board, one JSON file, mode 600
-kanban export | gzip > board.json.gz # or to stdout, so it can be piped
+byge export -o board.json          # every board, one JSON file, mode 600
+byge export | gzip > board.json.gz # or to stdout, so it can be piped
 
-kanban import -dry-run board.json    # says what the file holds, writes nothing
-kanban import board.json             # refuses a board that is already there
-kanban import -replace board.json    # deletes those boards first, then writes
+byge import -dry-run board.json    # says what the file holds, writes nothing
+byge import board.json             # refuses a board that is already there
+byge import -replace board.json    # deletes those boards first, then writes
 ```
 
 The file is the same on all three backends, so exporting from SQLite and
@@ -307,7 +326,7 @@ With a target set, the server writes the same document on a timer and prunes to
 ``` bash
 docker run -p 17808:17808 -v kanban:/data \
   -e STORAGE=sqlite -e BACKUP_DIR=/data/snapshots -e BACKUP_INTERVAL=6h \
-  ghcr.io/sapn95/golang-kanban:2.13.0
+  ghcr.io/sapn95/byge:2.13.0
 ```
 
 For a bucket, set `BACKUP_S3_BUCKET`, a region and the two AWS keys;
@@ -320,9 +339,9 @@ publishes the board.
 
 ### Building from source
 ``` bash
-go build ./cmd/kanban
+go build ./cmd/byge
 go test ./...                       # memory and sqlite backends, no database needed
-KANBAN_TEST_POSTGRES_URL=postgres://user:pass@localhost:5432/kanban_test?sslmode=disable go test ./...
+BYGE_TEST_POSTGRES_URL=postgres://user:pass@localhost:5432/kanban_test?sslmode=disable go test ./...
 ```
 
 Three things are generated and committed. Adding a Tailwind class to a template
@@ -348,11 +367,11 @@ If I feel like it I might work on some of these things:
 - [ ] make it pretty
 - [x] add sqlite option for people too lazy to setup a db
 - [x] tls, terminated in front of the app by the ingress or by the
-  oauth2-proxy sidecar in [deploy/helm](deploy/helm/kanban)
+  oauth2-proxy sidecar in [deploy/helm](deploy/helm/byge)
 - [x] oidc, in the same place: Entra, GitHub or any OIDC provider signs people
   in, and the app reads who they are from the header the proxy sets
 - [x] backups: one JSON snapshot of every board, written on a timer to a
-  directory or an S3 bucket, and read back with `kanban import`
+  directory or an S3 bucket, and read back with `byge import`
 - [ ] ...
 
 #### Contributing
@@ -361,4 +380,9 @@ The code layout and the rules it follows are in [docs/architecture.md](docs/arch
 Contributions are welcome! If you have ideas, bug fixes, or enhancements, feel free to fork the repository, open an issue, or submit a pull request.
 
 #### License
-This project is open-sourced under the MIT License.
+MIT, in [LICENSE](LICENSE), with Nicolas Haas's copyright on the original work
+and mine on what this fork added.
+
+Upstream has said MIT in its readme since v1.0.0 and has never carried a
+LICENSE file, so until now neither did this fork, while claiming the licence in
+the same sentence it inherited. The file is that claim written out.

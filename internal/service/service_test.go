@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"kanban/internal/model"
-	"kanban/internal/store"
-	"kanban/internal/store/memory"
+	"byge/internal/model"
+	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
 var fixed = time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 
-func newSvc(t *testing.T) *Kanban {
+func newSvc(t *testing.T) *Byge {
 	t.Helper()
 	n := 0
 	return New(memory.New(),
@@ -491,7 +491,7 @@ func TestBulkRejects(t *testing.T) {
 func TestBulkActions(t *testing.T) {
 	ctx := context.Background()
 
-	setup := func(t *testing.T) (*Kanban, *model.Board, []model.ID) {
+	setup := func(t *testing.T) (*Byge, *model.Board, []model.ID) {
 		t.Helper()
 		k := newSvc(t)
 		b, _ := k.CreateBoard(ctx, "B", "", nil)
@@ -706,7 +706,7 @@ func TestRestoreIsNotRefusedByAWIPLimit(t *testing.T) {
 }
 
 func TestComments(t *testing.T) {
-	newCard := func(t *testing.T) (*Kanban, context.Context, model.ID) {
+	newCard := func(t *testing.T) (*Byge, context.Context, model.ID) {
 		t.Helper()
 		k := newSvc(t)
 		ctx := context.Background()

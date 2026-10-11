@@ -1,4 +1,4 @@
-module kanban
+module byge
 
 go 1.26.0
 

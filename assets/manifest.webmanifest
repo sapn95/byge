@@ -1,6 +1,6 @@
 {
-  "name": "Kanban",
-  "short_name": "Kanban",
+  "name": "Byge",
+  "short_name": "Byge",
   "description": "A no-nonsense self-hosted kanban board.",
   "start_url": "/",
   "scope": "/",

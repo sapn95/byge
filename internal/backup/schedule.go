@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"kanban/internal/store"
+	"byge/internal/store"
 )
 
 // Schedule writes a snapshot to a Target on a timer and keeps the last few.
@@ -16,7 +16,7 @@ import (
 // because the deployments this project targets are one container: a sidecar
 // with a copy of the credentials and a second connection to the database, to
 // call code that is already in the binary, is the more complicated of the two.
-// An operator who would rather drive it from outside runs `kanban export` on
+// An operator who would rather drive it from outside runs `byge export` on
 // their own schedule and leaves BACKUP_INTERVAL unset.
 type Schedule struct {
 	Store  store.Store
