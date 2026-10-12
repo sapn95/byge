@@ -44,6 +44,9 @@ func Run(t *testing.T, newStore New) {
 		"MigrateTwice":  testMigrateTwice,
 		"ListOrdering":  testListOrdering,
 		"DeleteCascade": testDeleteCascade,
+		"Groups":        testGroups,
+		"Grants":        testGrants,
+		"BoardRoles":    testBoardRoles,
 	}
 	for name, fn := range tests {
 		t.Run(name, func(t *testing.T) {

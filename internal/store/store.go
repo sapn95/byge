@@ -171,4 +171,41 @@ type Store interface {
 	UpdateLabel(ctx context.Context, l *model.Label) error
 	// DeleteLabel removes the label from every card and deletes it.
 	DeleteLabel(ctx context.Context, id model.ID) error
+
+	// ListGroups returns every group with its members, by name.
+	ListGroups(ctx context.Context) ([]model.Group, error)
+	// GetGroup returns one group with its members. ErrNotFound when there is
+	// none.
+	GetGroup(ctx context.Context, id model.ID) (*model.Group, error)
+	// CreateGroup writes the group and its members. ErrConflict when another
+	// group already has the name, compared without case.
+	CreateGroup(ctx context.Context, g *model.Group) error
+	// UpdateGroup writes the name and replaces the whole membership, because a
+	// group has few enough members that naming the difference would be more to
+	// get wrong than it saves. ErrConflict on the name, ErrNotFound when the
+	// group is gone.
+	UpdateGroup(ctx context.Context, g *model.Group) error
+	// DeleteGroup removes the group, its membership and every grant made to
+	// it. A board left with no owner is the service's problem, not the
+	// store's.
+	DeleteGroup(ctx context.Context, id model.ID) error
+
+	// ListGrants returns a board's grants, by principal.
+	ListGrants(ctx context.Context, boardID model.ID) ([]model.Grant, error)
+	// SetGrant writes one principal's role on one board, replacing whatever
+	// role that principal held. ErrNotFound when the board is gone,
+	// ErrInvalid when the principal or the role is not one of the known ones.
+	SetGrant(ctx context.Context, g *model.Grant) error
+	// DeleteGrant takes a principal off a board. Taking off a grant that is
+	// not there is not an error: the caller wanted the principal to have none
+	// and it has none.
+	DeleteGrant(ctx context.Context, boardID model.ID, p model.Principal) error
+	// BoardRoles returns the role each of these principals holds, per board,
+	// already reduced to one role per board with model.Role.Max. It answers
+	// "which boards may this caller see, and as what" in one call, because
+	// drawing the board list and filtering a search both need exactly that and
+	// a query per board would make the list cost a query per board. A board
+	// the principals hold nothing on is absent rather than present as "".
+	// No principals is no roles, never every board.
+	BoardRoles(ctx context.Context, principals []model.Principal) (map[model.ID]model.Role, error)
 }

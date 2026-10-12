@@ -44,6 +44,7 @@ func migrations() []store.Migration {
 		{Version: 5, Name: "comments", Up: store.SQL(sqlFile("0005_comments.sql"))},
 		{Version: 6, Name: "layout", Up: store.SQL(sqlFile("0006_layout.sql"))},
 		{Version: 7, Name: "sla", Up: store.SQL(sqlFile("0007_sla.sql"))},
+		{Version: 8, Name: "access", Up: store.SQL(sqlFile("0008_access.sql"))},
 	}
 }
 
