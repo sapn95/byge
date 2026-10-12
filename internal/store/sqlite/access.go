@@ -24,7 +24,7 @@ func (s *Store) readGroups(ctx context.Context, q querier, where string, args ..
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []model.Group
 	byID := map[model.ID]int{}
 	for rows.Next() {
@@ -57,7 +57,7 @@ func (s *Store) readGroups(ctx context.Context, q querier, where string, args ..
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	defer mrows.Close()
+	defer func() { _ = mrows.Close() }()
 	for mrows.Next() {
 		var gid model.ID
 		var email string
@@ -182,7 +182,7 @@ func (s *Store) ListGrants(ctx context.Context, boardID model.ID) ([]model.Grant
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []model.Grant{}
 	for rows.Next() {
 		g := model.Grant{BoardID: boardID}
@@ -279,7 +279,7 @@ func (s *Store) BoardRoles(ctx context.Context, principals []model.Principal) (m
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var board model.ID
 		var role model.Role
