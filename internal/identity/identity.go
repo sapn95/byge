@@ -21,6 +21,7 @@ package identity
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -47,6 +48,44 @@ type User struct {
 	// secret and establishes no person: the assertion arrives with the token's
 	// name in it and no address anywhere.
 	Service string
+	// Groups are group names the identity provider sent with this request,
+	// lowercased, sorted and without duplicates. They are not the groups kept
+	// in this database; those are looked up by address. A board can be granted
+	// a role on either kind, which is what lets a deployment with an identity
+	// provider worth the name skip keeping its own membership lists.
+	//
+	// Whether these can be trusted is the deployment's question and not this
+	// package's. In access mode they are claims inside a signed assertion. In
+	// proxy mode they are a header, and a header is only as good as the thing
+	// in front of the port: anything that reaches the port another way sets
+	// its own. That was already true of the address, but an address only
+	// decided whose name went on a card and a group now decides who may write.
+	Groups []string
+}
+
+// normalGroups is how a list of group names from anywhere becomes the list a
+// grant is matched against: trimmed, lowercased, deduplicated and sorted. A
+// provider that changes the case or the order it sends between one sign-in
+// and the next must not change what a caller may do.
+func normalGroups(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, g := range in {
+		g = strings.ToLower(strings.TrimSpace(g))
+		if g == "" || seen[g] {
+			continue
+		}
+		seen[g] = true
+		out = append(out, g)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Anonymous reports whether the request carries no identity at all.
@@ -218,6 +257,11 @@ type Config struct {
 	Mode Mode
 	// Header is the header read in ModeProxy.
 	Header string
+	// GroupsHeader is the header read in ModeProxy for the caller's groups,
+	// one comma-separated list. Empty means the proxy sends none and only
+	// groups kept in this database apply. See User.Groups for what trusting
+	// it costs.
+	GroupsHeader string
 	// Verifier validates the assertion in ModeAccess.
 	Verifier interface {
 		Verify(ctx context.Context, token string) (User, error)
@@ -273,6 +317,9 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 			switch cfg.Mode {
 			case ModeProxy:
 				u.Email = strings.TrimSpace(r.Header.Get(header))
+				if cfg.GroupsHeader != "" {
+					u.Groups = normalGroups(strings.Split(r.Header.Get(cfg.GroupsHeader), ","))
+				}
 			case ModeAccess:
 				if tok := r.Header.Get(AccessAssertionHeader); tok != "" && cfg.Verifier != nil {
 					v, err := cfg.Verifier.Verify(r.Context(), tok)

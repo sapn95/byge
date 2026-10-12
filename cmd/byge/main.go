@@ -209,12 +209,18 @@ func serve(ctx context.Context, cfg config.Config, st store.Store, log *slog.Log
 // provider at all and the rest of the app does not have to know the
 // difference: every handler reads identity.FromContext and gets the zero user.
 func identityMiddleware(cfg config.Config, log *slog.Logger) func(http.Handler) http.Handler {
-	ic := identity.Config{Mode: identity.Mode(cfg.AuthMode), Header: cfg.AuthHeader, Required: cfg.AuthRequired}
+	ic := identity.Config{
+		Mode:         identity.Mode(cfg.AuthMode),
+		Header:       cfg.AuthHeader,
+		GroupsHeader: cfg.AuthGroupsHeader,
+		Required:     cfg.AuthRequired,
+	}
 	if cfg.AuthMode == config.AuthAccess {
 		ic.Verifier = &identity.AccessVerifier{
-			CertsURL: cfg.AccessCertsURL(),
-			Audience: cfg.AccessAudience,
-			Issuer:   cfg.AccessIssuer(),
+			CertsURL:    cfg.AccessCertsURL(),
+			Audience:    cfg.AccessAudience,
+			Issuer:      cfg.AccessIssuer(),
+			GroupsClaim: cfg.AccessGroupsClaim,
 		}
 		// Logged rather than fatal: an assertion that fails to verify is
 		// usually a key rotation or an expired session, and turning either

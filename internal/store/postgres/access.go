@@ -287,3 +287,25 @@ func (s *Store) BoardRoles(ctx context.Context, principals []model.Principal) (m
 	}
 	return out, mapErr(rows.Err())
 }
+
+// GroupsOf returns the IDs of the groups this address is a member of.
+func (s *Store) GroupsOf(ctx context.Context, email string) ([]model.ID, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT group_id FROM group_members WHERE email = $1 ORDER BY group_id`, email)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []model.ID
+	for rows.Next() {
+		var id model.ID
+		if err := rows.Scan(&id); err != nil {
+			return nil, mapErr(err)
+		}
+		out = append(out, id)
+	}
+	return out, mapErr(rows.Err())
+}

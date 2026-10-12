@@ -45,6 +45,17 @@ type AccessVerifier struct {
 	// applied to the context and not to the client, so a caller that supplies
 	// its own HTTP client cannot set it any other way.
 	FetchTimeout time.Duration
+	// GroupsClaim is the claim holding the caller's groups. Zero means
+	// defaultGroupsClaim. Which claim carries them is the identity
+	// provider's choice and Cloudflare passes it through, so this cannot be
+	// a constant: an Okta or Entra connection sends "groups", and a generic
+	// OIDC one may send anything its administrator mapped.
+	//
+	// The claim is read as a list of strings or as one string, because both
+	// are in use. Anything else in it is ignored rather than refused: a
+	// provider sending a shape this does not understand should cost the
+	// caller the grants made to their groups, not the whole sign-in.
+	GroupsClaim string
 
 	mu   sync.Mutex
 	keys map[string]*rsa.PublicKey
@@ -314,6 +325,10 @@ type jwtHeader struct {
 	Kid string `json:"kid"`
 }
 
+// defaultGroupsClaim is where Cloudflare puts IdP groups unless the
+// connection maps them somewhere else.
+const defaultGroupsClaim = "groups"
+
 type accessClaims struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
@@ -403,6 +418,7 @@ func (v *AccessVerifier) Verify(ctx context.Context, token string) (User, error)
 	if err := json.Unmarshal(claimsRaw, &c); err != nil {
 		return User{}, fmt.Errorf("identity: claims: %w", err)
 	}
+	groups := v.groupsFrom(claimsRaw)
 
 	now := v.now()
 	if c.Exp == 0 {
@@ -431,7 +447,38 @@ func (v *AccessVerifier) Verify(ctx context.Context, token string) (User, error)
 		if c.CommonName == "" {
 			return User{}, errors.New("identity: token carries neither an email nor a common name")
 		}
+		// A service token is a caller and not a person, and Cloudflare puts
+		// no groups in its assertion. Reading them anyway would mean a claim
+		// a token somehow carried decided what that token may write.
 		return User{Service: c.CommonName}, nil
 	}
-	return User{Email: c.Email, Name: c.Name}, nil
+	return User{Email: c.Email, Name: c.Name, Groups: groups}, nil
+}
+
+// groupsFrom pulls the configured claim out of the payload that has already
+// been verified. It is read from the raw bytes rather than through
+// accessClaims because the claim's name is configurable and a struct tag is
+// not.
+func (v *AccessVerifier) groupsFrom(claimsRaw []byte) []string {
+	name := v.GroupsClaim
+	if name == "" {
+		name = defaultGroupsClaim
+	}
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(claimsRaw, &all); err != nil {
+		return nil
+	}
+	raw, ok := all[name]
+	if !ok {
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(raw, &many); err == nil {
+		return normalGroups(many)
+	}
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		return normalGroups([]string{one})
+	}
+	return nil
 }

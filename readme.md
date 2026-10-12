@@ -199,6 +199,8 @@ AUTH_HEADER=X-Forwarded-Email  # AUTH_MODE=proxy only
 ACCESS_TEAM_DOMAIN=        # AUTH_MODE=access only, e.g. team.cloudflareaccess.com
 ACCESS_AUD=                # AUTH_MODE=access only, the application's AUD tag
 AUTH_REQUIRED=false        # true: refuse a request that arrives with no identity
+AUTH_GROUPS_HEADER=        # AUTH_MODE=proxy only, one comma-separated list of groups
+ACCESS_GROUPS_CLAIM=       # AUTH_MODE=access only, the claim holding them, default groups
 
 # Who the board says may see it. Shown in the app bar and enforced nowhere:
 # the sign-in in front of the board is what actually admits anybody.

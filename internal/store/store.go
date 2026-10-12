@@ -190,6 +190,14 @@ type Store interface {
 	// store's.
 	DeleteGroup(ctx context.Context, id model.ID) error
 
+	// GroupsOf returns the IDs of the groups kept here that this address is a
+	// member of, sorted. It is one read per request on the path that decides
+	// what a caller may do, so it is its own method rather than a filter over
+	// ListGroups: a deployment with a hundred groups should not read a
+	// hundred membership lists to find the two a person is in. An address
+	// that is in none, or is empty, gets none.
+	GroupsOf(ctx context.Context, email string) ([]model.ID, error)
+
 	// ListGrants returns a board's grants, by principal.
 	ListGrants(ctx context.Context, boardID model.ID) ([]model.Grant, error)
 	// SetGrant writes one principal's role on one board, replacing whatever
