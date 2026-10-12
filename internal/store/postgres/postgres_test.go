@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"strings"
+
+	"github.com/lib/pq"
 	"testing"
 	"time"
 
@@ -38,8 +40,32 @@ func reset(t *testing.T, db *sql.DB) {
 	if !strings.HasSuffix(name, "_test") {
 		t.Fatalf("refusing to drop tables in database %q: BYGE_TEST_POSTGRES_URL must name a disposable database whose name ends in _test", name)
 	}
-	_, err := db.Exec(`DROP TABLE IF EXISTS comments, card_labels, subtasks, cards, labels, columns, boards, schema_migrations, cards_v1 CASCADE`)
+	// Every table in the schema, read back rather than listed here. A list
+	// goes stale the first time a migration adds a table, and what that looks
+	// like is every test in the package failing on "relation already exists"
+	// in the migration after the one that was forgotten.
+	rows, err := db.Query(`SELECT tablename FROM pg_tables WHERE schemaname = current_schema()`)
 	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		tables = append(tables, pq.QuoteIdentifier(name))
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		t.Fatal(err)
+	}
+	rows.Close()
+	if len(tables) == 0 {
+		return
+	}
+	if _, err := db.Exec(`DROP TABLE ` + strings.Join(tables, ", ") + ` CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 }

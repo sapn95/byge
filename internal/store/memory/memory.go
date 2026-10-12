@@ -18,6 +18,11 @@ type Store struct {
 	boards   map[model.ID]*model.Board
 	cards    map[model.ID]*model.Card
 	comments map[model.ID]*model.Comment
+	groups   map[model.ID]*model.Group
+	// grants is board -> principal -> grant, because every read of it is
+	// either "this board's grants" or "these principals' boards" and a flat
+	// slice would scan for both.
+	grants map[model.ID]map[model.Principal]*model.Grant
 }
 
 // New returns an empty store.
@@ -26,6 +31,8 @@ func New() *Store {
 		boards:   map[model.ID]*model.Board{},
 		cards:    map[model.ID]*model.Card{},
 		comments: map[model.ID]*model.Comment{},
+		groups:   map[model.ID]*model.Group{},
+		grants:   map[model.ID]map[model.Principal]*model.Grant{},
 	}
 }
 
@@ -210,6 +217,10 @@ func (s *Store) DeleteBoard(_ context.Context, id model.ID) error {
 		return store.ErrNotFound
 	}
 	delete(s.boards, id)
+	// The SQL backends drop the grants with the board through a foreign key.
+	// Left behind here, they would come back as access to a board that no
+	// longer exists the moment an ID were reused.
+	delete(s.grants, id)
 	for cid, c := range s.cards {
 		if c.BoardID == id {
 			s.dropCard(cid)
