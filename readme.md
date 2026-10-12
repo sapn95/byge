@@ -385,4 +385,7 @@ and mine on what this fork added.
 
 Upstream has said MIT in its readme since v1.0.0 and has never carried a
 LICENSE file, so until now neither did this fork, while claiming the licence in
-the same sentence it inherited. The file is that claim written out.
+the same sentence it inherited. The file is that claim written out. It holds the bare MIT text and nothing
+else, because GitHub compares the file against known licences and enough extra
+text stops it matching: with the explanation still in the file, the API
+answered NOASSERTION.

@@ -3,11 +3,6 @@ MIT License
 Copyright (c) 2025 Nicolas Haas
 Copyright (c) 2026 Sebastian Winterberger
 
-This project is a fork of https://github.com/NicolasHaas/golang-kanban. The
-upstream readme has stated the MIT License since v1.0.0 (2025-03-25) without
-ever carrying a LICENSE file; this file is that statement written out, with the
-original copyright kept and the fork's own added beside it.
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
