@@ -26,7 +26,12 @@ import (
 // touch icon Safari wants, which has never taken an SVG, and the two sizes an
 // Android install reads out of the manifest.
 //
-//go:embed vendor app.js app.css tailwind.css logo.svg manifest.webmanifest sw.js icon-180.png icon-192.png icon-512.png
+// VERSIONS is in the list because the about page reads the attribution out
+// of it rather than restating it. It is served under /assets/VERSIONS as a
+// side effect, which is the record of what this board ships and whose it
+// is, so there is nothing in it that was not already public.
+//
+//go:embed vendor app.js app.css tailwind.css logo.svg manifest.webmanifest sw.js icon-180.png icon-192.png icon-512.png VERSIONS
 var files embed.FS
 
 // FS is the embedded file tree, rooted at the assets directory.

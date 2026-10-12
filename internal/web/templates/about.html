@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="max-w-xl mx-auto bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none p-6 space-y-6">
+  <div>
+    <h2 class="text-xl font-bold mb-2">byge</h2>
+    <p class="text-sm text-slate-600 dark:text-slate-300">
+      A self-hosted kanban board in one static Go binary. <em>Byge</em> is Bernese
+      German for a stack, and <em>byge</em> is the verb for stacking it: a column
+      is a stack of cards, so the name is also the instruction.
+    </p>
+  </div>
+
+  <div>
+    <h3 class="font-semibold mb-2">A fork</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-300">
+      It began as a fork of
+      <a class="underline hover:no-underline" href="{{.Upstream}}" rel="noopener noreferrer" target="_blank">NicolasHaas/golang-kanban</a>
+      at its v1.0.1, which was one Postgres table of cards under three fixed
+      columns. The boards, columns, labels, comments, archive, search, response
+      times, identity and JSON API came after that.
+    </p>
+  </div>
+
+  <div>
+    <h3 class="font-semibold mb-2">Licence</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-300">
+      MIT, with Nicolas Haas's copyright on the original work and Sebastian
+      Winterberger's on what this fork added. The text is in
+      <a class="underline hover:no-underline" href="https://github.com/sapn95/byge/blob/homelab/LICENSE" rel="noopener noreferrer" target="_blank">LICENSE</a>
+      in the repository.
+    </p>
+  </div>
+
+  {{if .Vendored}}
+  <div>
+    <h3 class="font-semibold mb-2">Shipped with it</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
+      Copied into the binary rather than fetched from a CDN, so the board works
+      with no outbound network and nobody's browser reports back anywhere. The
+      list and the digests are in
+      <a class="underline hover:no-underline" href="/assets/VERSIONS">assets/VERSIONS</a>,
+      which is what this page reads.
+    </p>
+    <ul class="text-sm space-y-1">
+      {{range .Vendored}}
+      <li class="flex flex-wrap items-baseline gap-x-2">
+        <a class="font-medium underline hover:no-underline" href="{{.Source}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>
+        <span class="text-slate-500 dark:text-slate-400">{{.Version}}</span>
+        <span class="text-slate-500 dark:text-slate-400">{{.Licence}}</span>
+      </li>
+      {{end}}
+      <li class="flex flex-wrap items-baseline gap-x-2">
+        <a class="font-medium underline hover:no-underline" href="https://tailwindcss.com" rel="noopener noreferrer" target="_blank">tailwindcss</a>
+        <span class="text-slate-500 dark:text-slate-400">MIT</span>
+        <span class="text-slate-500 dark:text-slate-400">compiled from these templates, not copied</span>
+      </li>
+    </ul>
+  </div>
+  {{end}}
+
+  {{if .Modules}}
+  <div>
+    <h3 class="font-semibold mb-2">Built against</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
+      The two Go modules this project requires, at the versions linked into the
+      binary that is answering. Their licences are on the pages below; this one
+      does not restate them.
+    </p>
+    <ul class="text-sm space-y-1">
+      {{range .Modules}}
+      <li class="flex flex-wrap items-baseline gap-x-2">
+        <a class="font-medium underline hover:no-underline" href="{{.Source}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>
+        <span class="text-slate-500 dark:text-slate-400">{{.Version}}</span>
+      </li>
+      {{end}}
+    </ul>
+  </div>
+  {{end}}
+
+  <div>
+    <h3 class="font-semibold mb-2">This build</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-300">
+      <a class="underline hover:no-underline" href="/version">byge {{build}}</a>, and
+      <a class="underline hover:no-underline" href="https://github.com/sapn95/byge" rel="noopener noreferrer" target="_blank">the source</a>.
+    </p>
+  </div>
+</div>
+{{end}}

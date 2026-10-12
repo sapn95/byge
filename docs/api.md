@@ -1,11 +1,11 @@
 # Endpoints
 
-Every route the server answers, all 44 of them, registered in one block in
+Every route the server answers, all 45 of them, registered in one block in
 `internal/web/server.go`. A test compares this file against that block and
 fails when either side has something the other does not, so a route cannot be
 added or removed without the table changing with it.
 
-The last of those 44 is the JSON API, which brings its own thirty-one routes under
+The last of those 45 is the JSON API, which brings its own thirty-one routes under
 `/api/v1/` and its own document; the [table below](#the-json-api) gives it one
 row. This file is about the page routes.
 
@@ -158,6 +158,7 @@ Cloudflare Access, protects this too.
 | `GET /manifest.webmanifest` | | The web app manifest, `no-cache`. At the root because a manifest's scope defaults to its own directory |
 | `GET /sw.js` | | The service worker, `no-cache`. At the root because a worker only controls what is under the path it came from |
 | `GET /offline` | | The page the service worker answers a navigation with when the server cannot be reached |
+| `GET /about` | | What this board is, the project it was forked from, the licence, and the files and modules it ships that somebody else wrote |
 
 ## What a failure looks like
 
