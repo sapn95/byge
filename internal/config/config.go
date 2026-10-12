@@ -61,17 +61,15 @@ type Config struct {
 	// groups in its own database, which is the setup that needs nothing
 	// configured anywhere else.
 	//
-	// AuthGroupsHeader is read in proxy mode and holds one comma-separated
-	// list. It is worth only as much as the proxy in front of the port: a
-	// caller that reaches the port another way sets its own. That was already
-	// true of AuthHeader, but an address decided whose name went on a card
-	// and a group decides who may write.
-	AuthGroupsHeader string `env:"AUTH_GROUPS_HEADER"`
-	// AccessGroupsClaim is the claim read in access mode. Empty means
-	// "groups", which is where Cloudflare puts them unless the connection
-	// maps them elsewhere. Inside a signed assertion, so a caller cannot
-	// choose its own.
-	AccessGroupsClaim string `env:"ACCESS_GROUPS_CLAIM"`
+	// `AUTH_GROUPS_HEADER` is read in proxy mode and holds one
+	// comma-separated list. It is worth only as much as the proxy in front of
+	// the port: a caller that reaches the port another way sets its own. That
+	// was already true of `AUTH_HEADER`, but an address decided whose name
+	// went on a card and a group decides who may write.
+	AuthGroupsHeader string `env:"AUTH_GROUPS_HEADER"` // proxy mode only, one comma-separated list; trusted only as far as the proxy in front of the port
+	// `ACCESS_GROUPS_CLAIM` is the claim read in access mode. Inside a signed
+	// assertion, so a caller cannot choose its own.
+	AccessGroupsClaim string `env:"ACCESS_GROUPS_CLAIM"` // access mode only; empty means the claim named groups, where Cloudflare puts them unless the connection maps them elsewhere
 
 	// Who the board says may see it, as a mail address list: `Ada Lovelace
 	// <ada@example.com>, grace@example.com`. Shown in the app bar and nowhere

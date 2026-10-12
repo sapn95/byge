@@ -46,17 +46,17 @@ Who is making the request. See [docs/adr/0005](adr/0005-request-identity.md) for
 | `ACCESS_AUD` | *(unset)* | the Access application's AUD tag |
 | `AUTH_REQUIRED` | `false` | true: a request with no identity is refused rather than served |
 
-Where the caller's groups come from, so that a board can be granted a role on a group the identity provider keeps rather than one kept here. Both are empty by default: a deployment that sets neither has only the groups in its own database, which is the setup that needs nothing configured anywhere else. AuthGroupsHeader is read in proxy mode and holds one comma-separated list. It is worth only as much as the proxy in front of the port: a caller that reaches the port another way sets its own. That was already true of AuthHeader, but an address decided whose name went on a card and a group decides who may write.
+Where the caller's groups come from, so that a board can be granted a role on a group the identity provider keeps rather than one kept here. Both are empty by default: a deployment that sets neither has only the groups in its own database, which is the setup that needs nothing configured anywhere else. `AUTH_GROUPS_HEADER` is read in proxy mode and holds one comma-separated list. It is worth only as much as the proxy in front of the port: a caller that reaches the port another way sets its own. That was already true of `AUTH_HEADER`, but an address decided whose name went on a card and a group decides who may write.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AUTH_GROUPS_HEADER` | *(unset)* |  |
+| `AUTH_GROUPS_HEADER` | *(unset)* | proxy mode only, one comma-separated list; trusted only as far as the proxy in front of the port |
 
-AccessGroupsClaim is the claim read in access mode. Empty means "groups", which is where Cloudflare puts them unless the connection maps them elsewhere. Inside a signed assertion, so a caller cannot choose its own.
+`ACCESS_GROUPS_CLAIM` is the claim read in access mode. Inside a signed assertion, so a caller cannot choose its own.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ACCESS_GROUPS_CLAIM` | *(unset)* |  |
+| `ACCESS_GROUPS_CLAIM` | *(unset)* | access mode only; empty means the claim named groups, where Cloudflare puts them unless the connection maps them elsewhere |
 
 Who the board says may see it, as a mail address list: `Ada Lovelace <ada@example.com>, grace@example.com`. Shown in the app bar and nowhere else. This is a copy of a list kept somewhere else, so one address per person is what reads well, and the sign-in in front of the board is what the copy has to agree with. It is drawn only for a caller the board identified. In `access` mode that means a verified assertion; in `proxy` mode it means a header, which anything that can reach the port can set, so a port reachable any other way wants `AUTH_REQUIRED` as well.
 
