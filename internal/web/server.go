@@ -164,6 +164,9 @@ func New(svc *service.Byge, ready func(context.Context) error, log *slog.Logger,
 	mux.HandleFunc("GET /manifest.webmanifest", s.manifest)
 	mux.HandleFunc("GET /sw.js", s.serviceWorker)
 	mux.HandleFunc("GET /offline", s.offline)
+	// Who wrote this, whose it is built on, and under what licence. No board
+	// and no identity, so it answers whatever the storage is doing.
+	mux.HandleFunc("GET /about", s.about)
 	return s.logging(s.recover(s.secureHeaders(s.crossSite(s.limitBody(mux)))))
 }
 
@@ -228,7 +231,7 @@ func (s *Server) parseTemplates() {
 		"templates/column.html"))
 	s.parts = base
 	s.pages = map[string]*template.Template{}
-	for _, name := range []string{"board", "boards", "archive", "settings", "offline"} {
+	for _, name := range []string{"board", "boards", "archive", "settings", "offline", "about"} {
 		s.pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFiles, "templates/"+name+".html"))
 	}
 }
