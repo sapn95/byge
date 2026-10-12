@@ -460,12 +460,17 @@ html.dark { color-scheme: dark; background-color: #020617; }
 .unfold > summary::marker {
   content: "";
 }
-/* A settings row's bin: closed it sits at the end of the line, open it takes
-   the whole width, which in a wrapping row puts it on a line of its own with the
-   question under it. The alternative is a tall box in the middle of a centred
-   row, pushing the card count and the arrows out of line. The switcher in the
-   app bar is the other kind and stays where it is, because its panel is
-   positioned over the page rather than laid out in it. */
+/* A bin on a settings row or in the board list: closed it sits at the end of
+   the line, open it takes the whole width, which in a wrapping row puts it on a
+   line of its own with the question under it. The alternative is a tall box in
+   the middle of a centred row, pushing the card count and the arrows out of
+   line. The switcher in the app bar is the other kind and stays where it is,
+   because its panel is positioned over the page rather than laid out in it.
+
+   The board list used to position its panel that way too, and it had nothing
+   over the page to be positioned against: out of flow, it drew straight over
+   the New board form underneath. A panel laid out in the row pushes what
+   follows down instead. */
 .unfold-row[open] {
   width: 100%;
 }
