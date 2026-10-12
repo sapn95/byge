@@ -317,7 +317,11 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 			switch cfg.Mode {
 			case ModeProxy:
 				u.Email = strings.TrimSpace(r.Header.Get(header))
-				if cfg.GroupsHeader != "" {
+				// Only beside an address. Groups with nobody behind them are
+				// a header the request set about a caller the proxy did not
+				// name, and Principals drops them anyway; not reading them is
+				// how that stays true if it ever stops dropping them.
+				if u.Email != "" && cfg.GroupsHeader != "" {
 					u.Groups = normalGroups(strings.Split(r.Header.Get(cfg.GroupsHeader), ","))
 				}
 			case ModeAccess:

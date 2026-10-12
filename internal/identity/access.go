@@ -418,8 +418,6 @@ func (v *AccessVerifier) Verify(ctx context.Context, token string) (User, error)
 	if err := json.Unmarshal(claimsRaw, &c); err != nil {
 		return User{}, fmt.Errorf("identity: claims: %w", err)
 	}
-	groups := v.groupsFrom(claimsRaw)
-
 	now := v.now()
 	if c.Exp == 0 {
 		return User{}, errors.New("identity: token carries no expiry")
@@ -452,7 +450,10 @@ func (v *AccessVerifier) Verify(ctx context.Context, token string) (User, error)
 		// a token somehow carried decided what that token may write.
 		return User{Service: c.CommonName}, nil
 	}
-	return User{Email: c.Email, Name: c.Name, Groups: groups}, nil
+	// Read after the checks above, so a token that is expired, for another
+	// application or from another issuer costs one base64 decode and not a
+	// second pass over its claims.
+	return User{Email: c.Email, Name: c.Name, Groups: v.groupsFrom(claimsRaw)}, nil
 }
 
 // groupsFrom pulls the configured claim out of the payload that has already
