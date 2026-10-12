@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"byge/internal/model"
@@ -245,6 +246,69 @@ func testBoardRoles(t *testing.T, s store.Store) {
 	if len(roles) != 0 {
 		t.Errorf("BoardRoles with the kinds and ids crossed = %v, want none", roles)
 	}
+}
+
+// testGroupsOf is the membership lookup the request path makes: one address
+// in, the groups it belongs to out.
+func testGroupsOf(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	platform := mustGroup(t, s, "Platform", "ada@example.com", "bea@example.com")
+	readers := mustGroup(t, s, "Readers", "ada@example.com")
+	mustGroup(t, s, "Nobody")
+
+	got, err := s.GroupsOf(ctx, "ADA@Example.com ")
+	if err != nil {
+		t.Fatalf("GroupsOf: %v", err)
+	}
+	want := []model.ID{platform.ID, readers.ID}
+	sortIDs(want)
+	if !equalIDs(got, want) {
+		t.Errorf("GroupsOf(ada) = %v, want %v", got, want)
+	}
+
+	// An address in nothing, and no address at all, are both none. An empty
+	// address matching every row would make an unidentified caller a member
+	// of everything.
+	for _, email := range []string{"cem@example.com", "", "   "} {
+		got, err = s.GroupsOf(ctx, email)
+		if err != nil {
+			t.Fatalf("GroupsOf(%q): %v", email, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("GroupsOf(%q) = %v, want none", email, got)
+		}
+	}
+
+	// Membership follows the group, so taking somebody out takes the lookup
+	// with it.
+	platform.Members = []string{"bea@example.com"}
+	platform.UpdatedAt = now()
+	if err := s.UpdateGroup(ctx, platform); err != nil {
+		t.Fatalf("UpdateGroup: %v", err)
+	}
+	if got, err = s.GroupsOf(ctx, "ada@example.com"); err != nil {
+		t.Fatalf("GroupsOf after update: %v", err)
+	}
+	if !equalIDs(got, []model.ID{readers.ID}) {
+		t.Errorf("GroupsOf(ada) after removal = %v, want only Readers", got)
+	}
+}
+
+// sortIDs and equalIDs compare an ID list without pulling in a dependency.
+func sortIDs(in []model.ID) {
+	sort.Slice(in, func(i, j int) bool { return in[i] < in[j] })
+}
+
+func equalIDs(a, b []model.ID) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // names lists the group names, for a failure message.

@@ -221,3 +221,24 @@ func (s *Store) BoardRoles(_ context.Context, principals []model.Principal) (map
 	}
 	return out, nil
 }
+
+// GroupsOf returns the IDs of the groups this address is a member of.
+func (s *Store) GroupsOf(_ context.Context, email string) ([]model.ID, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []model.ID
+	for id, g := range s.groups {
+		for _, m := range g.Members {
+			if m == email {
+				out = append(out, id)
+				break
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
+}
