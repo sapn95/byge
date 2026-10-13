@@ -294,6 +294,54 @@ func testGroupsOf(t *testing.T, s store.Store) {
 	}
 }
 
+// testBoardOf covers the two lookups that place a column or a label on its
+// board: the resolution, ErrNotFound for an unknown id, and that a second
+// board's column and label resolve to the second board, not the first. That
+// last part is the mutant guard: a lookup that returns "the only board" or
+// ignores its id passes the first board's assertions and fails here.
+func testBoardOf(t *testing.T, s store.Store) {
+	ctx := context.Background()
+
+	a := mustBoard(t, s, "board-a", "To Do")
+	colA := a.Columns[0].ID
+	labelA := &model.Label{ID: newID("l"), BoardID: a.ID, Name: "bug", Color: "#f00"}
+	if err := s.CreateLabel(ctx, labelA); err != nil {
+		t.Fatalf("CreateLabel(a): %v", err)
+	}
+	mustCard(t, s, a, colA, "a1")
+
+	if got, err := s.BoardOfColumn(ctx, colA); err != nil || got != a.ID {
+		t.Fatalf("BoardOfColumn(a) = %q, %v; want %q", got, err, a.ID)
+	}
+	if got, err := s.BoardOfLabel(ctx, labelA.ID); err != nil || got != a.ID {
+		t.Fatalf("BoardOfLabel(a) = %q, %v; want %q", got, err, a.ID)
+	}
+
+	// An unknown id of each kind is ErrNotFound, so the service can map a
+	// missing entity to a 404 rather than reading a board's role for it.
+	wantErr(t, "BoardOfColumn unknown", errOfID(s.BoardOfColumn(ctx, newID("c"))), store.ErrNotFound)
+	wantErr(t, "BoardOfLabel unknown", errOfID(s.BoardOfLabel(ctx, newID("l"))), store.ErrNotFound)
+
+	// A second board's column and label must resolve to the second board.
+	b := mustBoard(t, s, "board-b", "To Do")
+	colB := b.Columns[0].ID
+	labelB := &model.Label{ID: newID("l"), BoardID: b.ID, Name: "idea", Color: "#00f"}
+	if err := s.CreateLabel(ctx, labelB); err != nil {
+		t.Fatalf("CreateLabel(b): %v", err)
+	}
+
+	if got, err := s.BoardOfColumn(ctx, colB); err != nil || got != b.ID {
+		t.Fatalf("BoardOfColumn(b) = %q, %v; want %q, not %q", got, err, b.ID, a.ID)
+	}
+	if got, err := s.BoardOfLabel(ctx, labelB.ID); err != nil || got != b.ID {
+		t.Fatalf("BoardOfLabel(b) = %q, %v; want %q, not %q", got, err, b.ID, a.ID)
+	}
+}
+
+// errOfID drops the id a BoardOf* call returns beside its error, so a
+// not-found can be asserted in one line the way errOf does for a group.
+func errOfID(_ model.ID, err error) error { return err }
+
 // sortIDs and equalIDs compare an ID list without pulling in a dependency.
 func sortIDs(in []model.ID) {
 	sort.Slice(in, func(i, j int) bool { return in[i] < in[j] })
