@@ -20,7 +20,11 @@ func grant(t *testing.T, k *Byge, board model.ID, p model.Principal, role model.
 
 func mustMakeBoard(t *testing.T, k *Byge, name string) *model.Board {
 	t.Helper()
-	b, err := k.CreateBoard(context.Background(), name, "", nil)
+	// Create under the owner context so the board has a caller that owns it;
+	// its grant() helper then adds any extra roles the test needs. The behaviour
+	// tests check specific other principals, which owner@example.com's grant
+	// does not touch.
+	b, err := k.CreateBoard(ownerCtx(), name, "", nil)
 	if err != nil {
 		t.Fatalf("CreateBoard(%q): %v", name, err)
 	}

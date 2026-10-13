@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/store"
 )
@@ -193,11 +194,21 @@ func (k *Byge) Boards(ctx context.Context) ([]model.Board, error) {
 
 // Board returns one board by slug, which is what a URL carries.
 func (k *Byge) Board(ctx context.Context, slug string) (*model.Board, error) {
-	return k.store.GetBoard(ctx, slug)
+	b, err := k.store.GetBoard(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, b.ID, model.RoleRead); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // BoardByID returns one board by id, which is what a card carries.
 func (k *Byge) BoardByID(ctx context.Context, id model.ID) (*model.Board, error) {
+	if err := k.require(ctx, id, model.RoleRead); err != nil {
+		return nil, err
+	}
 	return k.store.GetBoardByID(ctx, id)
 }
 
@@ -212,16 +223,27 @@ func (k *Byge) EnsureDefaultBoard(ctx context.Context) ([]model.Board, error) {
 	if len(boards) > 0 {
 		return boards, nil
 	}
-	b, err := k.CreateBoard(ctx, DefaultBoardName, DefaultBoardSlug, nil)
+	// Bootstrap runs before anyone is identified, so it builds the board and
+	// writes it straight to the store, bypassing CreateBoard's identity guard.
+	// A default board has no human owner by definition; stage 5's onboarding is
+	// what gives it one, so there is no owner grant here.
+	b, err := k.buildBoard(DefaultBoardName, DefaultBoardSlug, nil)
 	if err != nil {
+		return nil, err
+	}
+	if err := k.store.CreateBoard(ctx, b); err != nil {
 		return nil, err
 	}
 	return []model.Board{*b}, nil
 }
 
-// CreateBoard creates a board. An empty slug is derived from the name; an
-// empty column list means DefaultColumns.
-func (k *Byge) CreateBoard(ctx context.Context, name, slug string, columns []string) (*model.Board, error) {
+// buildBoard normalises and builds a board from a name, an optional slug and
+// an optional column list, without touching the store. Shared by CreateBoard
+// and EnsureDefaultBoard so the one normalisation lives in one place: an empty
+// slug is derived from the name, an empty column list means DefaultColumns,
+// each column is trimmed and length-checked, and a board opens on the default
+// office-hours SLA and the columns layout.
+func (k *Byge) buildBoard(name, slug string, columns []string) (*model.Board, error) {
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -267,7 +289,36 @@ func (k *Byge) CreateBoard(ctx context.Context, name, slug string, columns []str
 		}
 		b.Columns = append(b.Columns, model.Column{ID: k.newID(), BoardID: b.ID, Name: c})
 	}
+	return b, nil
+}
+
+// CreateBoard creates a board. An empty slug is derived from the name; an
+// empty column list means DefaultColumns.
+//
+// It is open to any identified caller and makes that caller the board's owner.
+// There is no require() call: the board does not exist yet, so there is no role
+// to check. The guard is the identity check — an anonymous caller has no
+// address to own the board and is refused before anything is written.
+func (k *Byge) CreateBoard(ctx context.Context, name, slug string, columns []string) (*model.Board, error) {
+	u := identity.FromContext(ctx)
+	if !u.Person() {
+		return nil, ErrForbidden
+	}
+	b, err := k.buildBoard(name, slug, columns)
+	if err != nil {
+		return nil, err
+	}
 	if err := k.store.CreateBoard(ctx, b); err != nil {
+		return nil, err
+	}
+	// A board owned by nobody is a privilege escalation, so a board that exists
+	// must have an owner: a failed grant fails the create rather than leaving an
+	// orphan. The grant needs b.ID, so it sits after the store write.
+	if err := k.store.SetGrant(ctx, &model.Grant{
+		BoardID:   b.ID,
+		Principal: model.UserPrincipal(u.Email),
+		Role:      model.RoleOwner,
+	}); err != nil {
 		return nil, err
 	}
 	return b, nil
@@ -275,6 +326,9 @@ func (k *Byge) CreateBoard(ctx context.Context, name, slug string, columns []str
 
 // RenameBoard changes name and slug.
 func (k *Byge) RenameBoard(ctx context.Context, id model.ID, name, slug string) (*model.Board, error) {
+	if err := k.require(ctx, id, model.RoleOwner); err != nil {
+		return nil, err
+	}
 	b, err := k.store.GetBoardByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -308,6 +362,9 @@ func (k *Byge) SetBoardLayout(ctx context.Context, id model.ID, layout string) e
 	default:
 		return invalid("layout", "must be columns or rows")
 	}
+	if err := k.require(ctx, id, model.RoleOwner); err != nil {
+		return err
+	}
 	// One column, not the whole board: a layout switch and a rename are two
 	// forms on two pages, and writing all of it meant either putting the other
 	// one back.
@@ -323,6 +380,9 @@ func (k *Byge) SetBoardLayout(ctx context.Context, id model.ID, layout string) e
 // it as off, and a promise that silently stopped promising is worse than one
 // the form would not accept.
 func (k *Byge) SetBoardSLA(ctx context.Context, id model.ID, sla model.SLA) error {
+	if err := k.require(ctx, id, model.RoleOwner); err != nil {
+		return err
+	}
 	if sla.ResponseHours < 0 || sla.ResponseHours > model.MaxResponseHours {
 		return invalid("response_hours", fmt.Sprintf("must be between 0 and %d", model.MaxResponseHours))
 	}
@@ -351,6 +411,9 @@ func (k *Byge) SetBoardSLA(ctx context.Context, id model.ID, sla model.SLA) erro
 // DeleteBoard removes a board and everything on it. Nothing brings it back, so
 // the confirmation belongs to whatever is calling.
 func (k *Byge) DeleteBoard(ctx context.Context, id model.ID) error {
+	if err := k.require(ctx, id, model.RoleOwner); err != nil {
+		return err
+	}
 	return k.store.DeleteBoard(ctx, id)
 }
 
@@ -359,6 +422,9 @@ func (k *Byge) DeleteBoard(ctx context.Context, id model.ID) error {
 // AddColumn appends a column to a board, after checking its name and that a
 // negative WIP limit is not a limit.
 func (k *Byge) AddColumn(ctx context.Context, boardID model.ID, name string, wipLimit int, stopsClock bool) (*model.Column, error) {
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return nil, err
+	}
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -377,6 +443,13 @@ func (k *Byge) AddColumn(ctx context.Context, boardID model.ID, name string, wip
 // response clock. Lowering a limit below what the column already holds is
 // allowed: the cards are there, and refusing would leave nowhere to put them.
 func (k *Byge) UpdateColumn(ctx context.Context, id model.ID, name string, wipLimit int, stopsClock bool) error {
+	boardID, err := k.store.BoardOfColumn(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return err
+	}
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return err
@@ -394,6 +467,9 @@ func (k *Byge) UpdateColumn(ctx context.Context, id model.ID, name string, wipLi
 // nowhere to put one, so the delete would leave something that can only be
 // repaired through the database.
 func (k *Byge) RemoveColumn(ctx context.Context, boardID, id, moveCardsTo model.ID) error {
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return err
+	}
 	b, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return err
@@ -413,6 +489,9 @@ func (k *Byge) RemoveColumn(ctx context.Context, boardID, id, moveCardsTo model.
 // ReorderColumns sets a board's column order. The store checks that the order
 // names each column once, because only it can see the whole set.
 func (k *Byge) ReorderColumns(ctx context.Context, boardID model.ID, order []model.ID) error {
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return err
+	}
 	return k.store.ReorderColumns(ctx, boardID, order)
 }
 
@@ -486,12 +565,22 @@ func (k *Byge) applyInput(c *model.Card, in CardInput) error {
 
 // Cards returns a board's cards, ordered by column then position.
 func (k *Byge) Cards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
+	if err := k.require(ctx, boardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	return k.store.ListCards(ctx, boardID)
 }
 
 // Card returns one card by id.
 func (k *Byge) Card(ctx context.Context, id model.ID) (*model.Card, error) {
-	return k.store.GetCard(ctx, id)
+	c, err := k.store.GetCard(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleRead); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // wipRoom reports whether column can hold `adding` more cards. The ids in
@@ -534,6 +623,9 @@ func (k *Byge) wipRoom(ctx context.Context, board *model.Board, columnID model.I
 
 // CreateCard appends a card to a column.
 func (k *Byge) CreateCard(ctx context.Context, boardID, columnID model.ID, in CardInput) (*model.Card, error) {
+	if err := k.require(ctx, boardID, model.RoleWrite); err != nil {
+		return nil, err
+	}
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return nil, err
@@ -576,6 +668,9 @@ func (k *Byge) CheckCardInput(ctx context.Context, id model.ID, in CardInput) er
 	}
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
 		return err
 	}
 	if err := checkSubtaskIDs(c, in); err != nil {
@@ -673,6 +768,9 @@ func (k *Byge) UpdateCard(ctx context.Context, id model.ID, in CardInput) (*mode
 	if err != nil {
 		return nil, err
 	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
+		return nil, err
+	}
 	if err := k.applyInput(c, in); err != nil {
 		return nil, err
 	}
@@ -699,6 +797,9 @@ func (k *Byge) SetCardAssignee(ctx context.Context, id model.ID, assignee string
 	}
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
 		return nil, err
 	}
 	if c.Assignee == assignee {
@@ -731,6 +832,9 @@ func (k *Byge) SetCardDueDate(ctx context.Context, id model.ID, due string) (*mo
 	}
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
 		return nil, err
 	}
 	if c.DueDate.Equal(date) {
@@ -777,6 +881,9 @@ func (k *Byge) SetSubtaskDone(ctx context.Context, id, subtaskID model.ID, done 
 	if err != nil {
 		return nil, err
 	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
+		return nil, err
+	}
 	i := slices.IndexFunc(c.Subtasks, func(s model.Subtask) bool { return s.ID == subtaskID })
 	if i < 0 {
 		return nil, store.ErrNotFound
@@ -803,6 +910,9 @@ func (k *Byge) SetSubtaskDone(ctx context.Context, id, subtaskID model.ID, done 
 func (k *Byge) SetCardLabel(ctx context.Context, id, labelID model.ID, on bool) (*model.Card, error) {
 	c, err := k.store.GetCard(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
 		return nil, err
 	}
 	b, err := k.store.GetBoardByID(ctx, c.BoardID)
@@ -874,6 +984,9 @@ func People(cards []model.Card, extra ...string) []string {
 // An empty query returns the board unfiltered, so the search box can be wired
 // to the same handler as the board itself.
 func (k *Byge) Search(ctx context.Context, boardID model.ID, q Query) ([]model.Card, error) {
+	if err := k.require(ctx, boardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return nil, err
@@ -911,6 +1024,13 @@ func (k *Byge) Search(ctx context.Context, boardID model.ID, q Query) ([]model.C
 // ArchiveCard takes a card off the board. It keeps its column, position,
 // labels and subtasks, so RestoreCard puts back the same card.
 func (k *Byge) ArchiveCard(ctx context.Context, id model.ID) error {
+	c, err := k.store.GetCard(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
+		return err
+	}
 	return k.store.SetCardArchived(ctx, id, k.now())
 }
 
@@ -921,22 +1041,42 @@ func (k *Byge) ArchiveCard(ctx context.Context, id model.ID) error {
 // leave the card in the archive with nothing the user can do about it except
 // move something else first.
 func (k *Byge) RestoreCard(ctx context.Context, id model.ID) error {
+	c, err := k.store.GetCard(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
+		return err
+	}
 	return k.store.SetCardArchived(ctx, id, time.Time{})
 }
 
 // ArchivedCards returns a board's archived cards, most recently archived first.
 func (k *Byge) ArchivedCards(ctx context.Context, boardID model.ID) ([]model.Card, error) {
+	if err := k.require(ctx, boardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	return k.store.ListArchivedCards(ctx, boardID)
 }
 
 // DeleteCard removes a card for good. Archiving is the reversible one.
 func (k *Byge) DeleteCard(ctx context.Context, id model.ID) error {
+	c, err := k.store.GetCard(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleWrite); err != nil {
+		return err
+	}
 	return k.store.DeleteCard(ctx, id)
 }
 
 // ReorderCards sets the authoritative order of one column, moving listed
 // cards in from other columns. It refuses to exceed the column's WIP limit.
 func (k *Byge) ReorderCards(ctx context.Context, boardID, columnID model.ID, order []model.ID) error {
+	if err := k.require(ctx, boardID, model.RoleWrite); err != nil {
+		return err
+	}
 	board, err := k.store.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return err
@@ -955,12 +1095,22 @@ func (k *Byge) ReorderCards(ctx context.Context, boardID, columnID model.ID, ord
 
 // Comments returns a card's thread, oldest first.
 func (k *Byge) Comments(ctx context.Context, cardID model.ID) ([]model.Comment, error) {
+	c, err := k.store.GetCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, c.BoardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	return k.store.ListComments(ctx, cardID)
 }
 
 // CommentCounts returns how many comments each card of a board carries, for
 // the badge on the card face. Cards without any are absent from the map.
 func (k *Byge) CommentCounts(ctx context.Context, boardID model.ID) (map[model.ID]int, error) {
+	if err := k.require(ctx, boardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	return k.store.CountComments(ctx, boardID)
 }
 
@@ -978,6 +1128,13 @@ func (k *Byge) CommentCounts(ctx context.Context, boardID model.ID) (map[model.I
 // the same comment posted twice. What it costs is an SLA badge that stays red
 // until the next edit.
 func (k *Byge) AddComment(ctx context.Context, cardID model.ID, author, body string) (*model.Comment, error) {
+	card, err := k.store.GetCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, card.BoardID, model.RoleWrite); err != nil {
+		return nil, err
+	}
 	body = strings.TrimSpace(strings.ReplaceAll(body, "\r\n", "\n"))
 	if err := checkText("body", body, MaxComment, true); err != nil {
 		return nil, err
@@ -1017,6 +1174,13 @@ func (k *Byge) DeleteComment(ctx context.Context, id model.ID, asker string) (*m
 	if err != nil {
 		return nil, err
 	}
+	card, err := k.store.GetCard(ctx, c.CardID)
+	if err != nil {
+		return nil, err
+	}
+	if err := k.require(ctx, card.BoardID, model.RoleRead); err != nil {
+		return nil, err
+	}
 	if !strings.EqualFold(strings.TrimSpace(asker), c.Author) {
 		return nil, ErrNotAuthor
 	}
@@ -1051,6 +1215,9 @@ func checkColor(color string) (string, error) {
 
 // CreateLabel adds a label to a board, checking its name and its colour.
 func (k *Byge) CreateLabel(ctx context.Context, boardID model.ID, name, color string) (*model.Label, error) {
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return nil, err
+	}
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return nil, err
@@ -1068,11 +1235,18 @@ func (k *Byge) CreateLabel(ctx context.Context, boardID model.ID, name, color st
 
 // UpdateLabel renames a label or recolours it, on every card at once.
 func (k *Byge) UpdateLabel(ctx context.Context, id model.ID, name, color string) error {
+	boardID, err := k.store.BoardOfLabel(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return err
+	}
 	name = strings.TrimSpace(name)
 	if err := checkText("name", name, MaxName, true); err != nil {
 		return err
 	}
-	color, err := checkColor(color)
+	color, err = checkColor(color)
 	if err != nil {
 		return err
 	}
@@ -1081,6 +1255,13 @@ func (k *Byge) UpdateLabel(ctx context.Context, id model.ID, name, color string)
 
 // DeleteLabel removes a label from its board and from every card carrying it.
 func (k *Byge) DeleteLabel(ctx context.Context, id model.ID) error {
+	boardID, err := k.store.BoardOfLabel(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := k.require(ctx, boardID, model.RoleOwner); err != nil {
+		return err
+	}
 	return k.store.DeleteLabel(ctx, id)
 }
 
@@ -1117,6 +1298,9 @@ type BulkResult struct {
 // reported instead of hidden.
 func (k *Byge) Bulk(ctx context.Context, boardID model.ID, action BulkAction, ids []model.ID, target string) (BulkResult, error) {
 	res := BulkResult{Failed: map[model.ID]error{}}
+	if err := k.require(ctx, boardID, model.RoleWrite); err != nil {
+		return res, err
+	}
 	if len(ids) == 0 {
 		return res, invalid("ids", "no cards selected")
 	}
