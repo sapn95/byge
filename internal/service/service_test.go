@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/store"
 	"byge/internal/store/memory"
@@ -21,6 +22,15 @@ func newSvc(t *testing.T) *Byge {
 	return New(memory.New(),
 		WithClock(func() time.Time { return fixed }),
 		WithIDs(func() model.ID { n++; return model.ID(fmt.Sprintf("id%03d", n)) }))
+}
+
+// ownerCtx is the caller the enforced suite runs as: a person, so CreateBoard
+// identifies them and self-grants them owner on every board they create. Every
+// board-scoped method here then passes require() because the board's creator
+// owns it. The bootstrap and pure tests stay on a plain context, because
+// EnsureDefaultBoard must still work with no identity.
+func ownerCtx() context.Context {
+	return identity.NewContext(context.Background(), identity.User{Email: "owner@example.com"})
 }
 
 func isValidation(err error, field string) bool {
@@ -46,6 +56,8 @@ func TestSlugify(t *testing.T) {
 
 func TestEnsureDefaultBoard(t *testing.T) {
 	k := newSvc(t)
+	// Bootstrap runs before anyone is identified, so this stays on a plain
+	// context: EnsureDefaultBoard must work with no identity.
 	ctx := context.Background()
 	boards, err := k.EnsureDefaultBoard(ctx)
 	if err != nil || len(boards) != 1 || boards[0].Slug != DefaultBoardSlug || len(boards[0].Columns) != 3 {
@@ -58,21 +70,26 @@ func TestEnsureDefaultBoard(t *testing.T) {
 	if err != nil || len(again) != 1 || again[0].ID != boards[0].ID {
 		t.Fatalf("second call = %+v, %v", again, err)
 	}
+	// Boards is unguarded, so the bootstrap board shows up in the list even
+	// though no one has a grant on it.
 	list, _ := k.Boards(ctx)
 	if len(list) != 1 {
 		t.Fatalf("Boards = %+v", list)
 	}
-	if _, err := k.Board(ctx, DefaultBoardSlug); err != nil {
-		t.Fatal(err)
+	// The bootstrap board has no owner grant, so an anonymous caller cannot
+	// read it: the guarded reads are refused rather than returning the board.
+	// Stage 5's onboarding is what gives the default board an owner.
+	if _, err := k.Board(ctx, DefaultBoardSlug); !errors.Is(err, ErrForbidden) {
+		t.Errorf("Board on the ungranted bootstrap board = %v, want ErrForbidden", err)
 	}
-	if _, err := k.BoardByID(ctx, boards[0].ID); err != nil {
-		t.Fatal(err)
+	if _, err := k.BoardByID(ctx, boards[0].ID); !errors.Is(err, ErrForbidden) {
+		t.Errorf("BoardByID on the ungranted bootstrap board = %v, want ErrForbidden", err)
 	}
 }
 
 func TestCreateBoardValidation(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	if _, err := k.CreateBoard(ctx, "  ", "", nil); !isValidation(err, "name") {
 		t.Errorf("empty name: %v", err)
 	}
@@ -113,20 +130,25 @@ func TestCreateBoardValidation(t *testing.T) {
 	if _, err := k.RenameBoard(ctx, b.ID, "", ""); !isValidation(err, "name") {
 		t.Errorf("rename empty: %v", err)
 	}
-	if _, err := k.RenameBoard(ctx, "nope", "x", ""); !errors.Is(err, store.ErrNotFound) {
+	// With enforcement the owner check runs before the board is read, so a
+	// board that is not there is a refusal (no grant) rather than a miss.
+	if _, err := k.RenameBoard(ctx, "nope", "x", ""); !errors.Is(err, ErrForbidden) {
 		t.Errorf("rename unknown: %v", err)
 	}
 	if err := k.DeleteBoard(ctx, b.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := k.DeleteBoard(ctx, b.ID); !errors.Is(err, store.ErrNotFound) {
+	// Deleting the board dropped its grants with it, so the second delete finds
+	// the caller holds nothing on that id and is refused before the store is
+	// asked whether the board is still there.
+	if err := k.DeleteBoard(ctx, b.ID); !errors.Is(err, ErrForbidden) {
 		t.Errorf("delete twice: %v", err)
 	}
 }
 
 func TestColumns(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	if _, err := k.AddColumn(ctx, b.ID, " ", 0, false); !isValidation(err, "name") {
 		t.Errorf("empty: %v", err)
@@ -165,7 +187,7 @@ func TestColumns(t *testing.T) {
 
 func TestTheLastColumnCannotBeDeleted(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := k.CreateBoard(ctx, "One", "", []string{"Only"})
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +219,7 @@ func TestTheLastColumnCannotBeDeleted(t *testing.T) {
 
 func TestCards(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	todo, doing := b.Columns[0].ID, b.Columns[1].ID
 	lbl, err := k.CreateLabel(ctx, b.ID, " bug ", " #f00 ")
@@ -221,7 +243,10 @@ func TestCards(t *testing.T) {
 			t.Errorf("%s: %v", tc.name, err)
 		}
 	}
-	if _, err := k.CreateCard(ctx, "nope", todo, CardInput{Title: "t"}); !errors.Is(err, store.ErrNotFound) {
+	// The write check runs on the board id before the board is read, so an
+	// unknown board is a refusal; an unknown column on a board the caller owns
+	// is still a miss.
+	if _, err := k.CreateCard(ctx, "nope", todo, CardInput{Title: "t"}); !errors.Is(err, ErrForbidden) {
 		t.Errorf("unknown board: %v", err)
 	}
 	if _, err := k.CreateCard(ctx, b.ID, "nope", CardInput{Title: "t"}); !errors.Is(err, store.ErrNotFound) {
@@ -269,7 +294,9 @@ func TestCards(t *testing.T) {
 	if len(cards) != 2 || cards[1].ID != c2.ID || cards[1].ColumnID != doing {
 		t.Fatalf("cards = %+v", cards)
 	}
-	if err := k.ReorderCards(ctx, "nope", doing, nil); !errors.Is(err, store.ErrNotFound) {
+	// The write check runs on the board id first, so an unknown board is a
+	// refusal; an unknown column on a board the caller owns is still a miss.
+	if err := k.ReorderCards(ctx, "nope", doing, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("reorder unknown board: %v", err)
 	}
 	if err := k.ReorderCards(ctx, b.ID, "nope", nil); !errors.Is(err, store.ErrNotFound) {
@@ -298,7 +325,7 @@ func TestCards(t *testing.T) {
 
 func TestWIPLimit(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	todo, doing := b.Columns[0].ID, b.Columns[1].ID
 	if err := k.UpdateColumn(ctx, doing, "Doing", 1, false); err != nil {
@@ -339,7 +366,7 @@ func TestWIPLimit(t *testing.T) {
 // answers 500. These are the ones that did.
 func TestTheCheckRefusesWhatAStoreWould(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "seed"})
 	if err != nil {
@@ -392,7 +419,7 @@ func TestTheCheckRefusesWhatAStoreWould(t *testing.T) {
 // an order that adds nothing.
 func TestAColumnOverItsLimitCanStillBeSorted(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	todo, doing := b.Columns[0].ID, b.Columns[1].ID
 	var in []model.ID
@@ -437,7 +464,7 @@ func (failing) ListCards(context.Context, model.ID) ([]model.Card, error) { retu
 func TestStoreErrors(t *testing.T) {
 	mem := memory.New()
 	k := New(failing{mem})
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := k.CreateBoard(ctx, "B", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -462,7 +489,7 @@ func TestStoreErrors(t *testing.T) {
 
 func TestBulkRejects(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "one"})
 	if err != nil {
@@ -489,7 +516,7 @@ func TestBulkRejects(t *testing.T) {
 }
 
 func TestBulkActions(t *testing.T) {
-	ctx := context.Background()
+	ctx := ownerCtx()
 
 	setup := func(t *testing.T) (*Byge, *model.Board, []model.ID) {
 		t.Helper()
@@ -611,7 +638,7 @@ func TestBulkActions(t *testing.T) {
 
 func TestSubtaskCountIsCapped(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 
 	// Measured before the cap existed: 200 000 subtasks rendered a board page
@@ -636,7 +663,7 @@ func TestSubtaskCountIsCapped(t *testing.T) {
 
 func TestBulkDoesNotEchoTheAction(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "one"})
 
@@ -651,7 +678,7 @@ func TestBulkDoesNotEchoTheAction(t *testing.T) {
 
 func TestArchiveAndRestore(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	todo := b.Columns[0].ID
 	a, _ := k.CreateCard(ctx, b.ID, todo, CardInput{Title: "one"})
@@ -679,7 +706,7 @@ func TestArchiveAndRestore(t *testing.T) {
 
 func TestRestoreIsNotRefusedByAWIPLimit(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	todo := b.Columns[0].ID
 	a, _ := k.CreateCard(ctx, b.ID, todo, CardInput{Title: "archived"})
@@ -709,7 +736,7 @@ func TestComments(t *testing.T) {
 	newCard := func(t *testing.T) (*Byge, context.Context, model.ID) {
 		t.Helper()
 		k := newSvc(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := k.CreateBoard(ctx, "B", "", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -747,7 +774,7 @@ func TestComments(t *testing.T) {
 		k := New(memory.New(),
 			WithClock(func() time.Time { return tick }),
 			WithIDs(func() model.ID { n++; return model.ID(fmt.Sprintf("id%03d", n)) }))
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := k.CreateBoard(ctx, "B", "", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -828,7 +855,7 @@ func TestComments(t *testing.T) {
 
 	t.Run("counts are per card and skip the ones with none", func(t *testing.T) {
 		k := newSvc(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, _ := k.CreateBoard(ctx, "B", "", nil)
 		loud, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "loud"})
 		quiet, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "quiet"})
@@ -880,7 +907,7 @@ func TestLabelColourIsCheckedBeforeItReachesATemplate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := newSvc(t)
-			ctx := context.Background()
+			ctx := ownerCtx()
 			b, _ := k.CreateBoard(ctx, "B", "", nil)
 			l, err := k.CreateLabel(ctx, b.ID, "label", tt.in)
 			if tt.valid {
@@ -904,7 +931,7 @@ func TestLabelColourIsCheckedBeforeItReachesATemplate(t *testing.T) {
 
 func TestSetCardAssignee(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "T"})
 	if err != nil {
@@ -941,7 +968,7 @@ func TestSetCardAssignee(t *testing.T) {
 
 func TestSetCardAssigneeToTheSamePersonChangesNothing(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "T", Assignee: "her@example.com"})
 
@@ -959,7 +986,7 @@ func TestSetCardAssigneeToTheSamePersonChangesNothing(t *testing.T) {
 
 func TestSetCardDueDate(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "T", Description: "why"})
 	if err != nil {
@@ -1002,7 +1029,7 @@ func TestSetCardDueDate(t *testing.T) {
 
 func TestSetCardDueDateToTheSameDayChangesNothing(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	c, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "T", DueDate: "2026-12-24"})
 
@@ -1020,7 +1047,7 @@ func TestSetCardDueDateToTheSameDayChangesNothing(t *testing.T) {
 
 func TestSetCardLabel(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, _ := k.CreateBoard(ctx, "B", "", nil)
 	bug, _ := k.CreateLabel(ctx, b.ID, "bug", "#f00")
 	c, _ := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{Title: "T"})
@@ -1168,7 +1195,7 @@ func TestSetBoardSLA(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := newSvc(t)
-			ctx := context.Background()
+			ctx := ownerCtx()
 			b, err := k.CreateBoard(ctx, "B", "", nil)
 			if err != nil {
 				t.Fatal(err)
@@ -1205,12 +1232,16 @@ func TestSetBoardSLA(t *testing.T) {
 }
 
 // TestSetBoardSLAOnABoardThatIsNotThere is the path a stale settings page takes.
+// With enforcement the owner check runs before the board is read, and a board
+// that is not there carries no grant, so the caller is refused with
+// ErrForbidden rather than told the board is missing. The design accepts that
+// leak: a board's existence is not the secret, its contents are.
 func TestSetBoardSLAOnABoardThatIsNotThere(t *testing.T) {
 	k := newSvc(t)
-	err := k.SetBoardSLA(context.Background(), "nope", model.SLA{
+	err := k.SetBoardSLA(ownerCtx(), "nope", model.SLA{
 		ResponseHours: 4, Days: model.MonToFri, Start: 8 * 60, End: 17 * 60})
-	if !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("SetBoardSLA = %v, want ErrNotFound", err)
+	if !errors.Is(err, ErrForbidden) {
+		t.Errorf("SetBoardSLA = %v, want ErrForbidden", err)
 	}
 }
 
@@ -1218,7 +1249,7 @@ func TestSetBoardSLAOnABoardThatIsNotThere(t *testing.T) {
 // cards by hand was refused at a full column and moving them from the toolbar
 // was not, so the toolbar was the way past a limit the board draws in red.
 func TestBulkRespectsTheLimits(t *testing.T) {
-	ctx := context.Background()
+	ctx := ownerCtx()
 	k := New(memory.New())
 	b, err := k.CreateBoard(ctx, "Bulk", "bulk", []string{"Inbox", "Doing"})
 	if err != nil {
@@ -1277,7 +1308,7 @@ func TestBulkRespectsTheLimits(t *testing.T) {
 // A checklist line's id is one this service issued for that card, or nothing at
 // all. Anything else travels through a line format that cannot carry it.
 func TestSubtaskIDsAreNotTheCallersToChoose(t *testing.T) {
-	ctx := context.Background()
+	ctx := ownerCtx()
 	k := New(memory.New())
 	b, err := k.CreateBoard(ctx, "Checklists", "checklists", []string{"To Do"})
 	if err != nil {
@@ -1346,7 +1377,7 @@ func TestSubtaskIDsAreNotTheCallersToChoose(t *testing.T) {
 // field and it is the name, refused it with a sentence about a slug.
 func TestABoardCanBeNamedInAnyScript(t *testing.T) {
 	k := newSvc(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	for _, name := range []string{"日本語", "Проект", "Ελλάδα", "لوحة"} {
 		b, err := k.CreateBoard(ctx, name, "", nil)
 		if err != nil {
