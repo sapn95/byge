@@ -32,10 +32,19 @@
      mistake; the board is the page that wants the whole screen. -->
 <div class="mx-auto max-w-4xl">
 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-  <a href="/b/{{.BoardSlug}}"
-     class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-sm">
-    <i class="bi bi-arrow-left"></i>Back to the board
-  </a>
+  <div class="flex flex-wrap items-center gap-3">
+    <a href="/b/{{.BoardSlug}}"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-sm">
+      <i class="bi bi-arrow-left"></i>Back to the board
+    </a>
+    <!-- Who may use this board. Owner only, so a reader or writer who follows
+         it is refused by the service with a 403; the link is drawn either way,
+         like the footer's. -->
+    <a href="/b/{{.BoardSlug}}/access"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-sm">
+      <i class="bi bi-people"></i>Access
+    </a>
+  </div>
   <span class="text-sm text-slate-500 dark:text-slate-400">
     {{len .Columns}} column{{if ne (len .Columns) 1}}s{{end}},
     {{len .Labels}} label{{if ne (len .Labels) 1}}s{{end}}

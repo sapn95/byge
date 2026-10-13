@@ -164,6 +164,9 @@
                  flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
     <a href="/boards" class="hover:text-slate-600 dark:hover:text-slate-300">All boards</a>
     <a href="/about" class="hover:text-slate-600 dark:hover:text-slate-300">About</a>
+    <!-- The groups kept in this database. Drawn unconditionally, as the two
+         above are; the page itself refuses an anonymous caller with 403. -->
+    <a href="/groups" class="hover:text-slate-600 dark:hover:text-slate-300">Local groups</a>
     {{if hasAPI}}
     <a href="/api/v1/" class="hover:text-slate-600 dark:hover:text-slate-300">JSON API</a>
     {{end}}

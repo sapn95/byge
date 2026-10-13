@@ -39,13 +39,17 @@ func TestEveryBoardScopedMethodRequires(t *testing.T) {
 		"RoleOn":             "an access primitive require is built from",
 		"VisibleBoards":      "an access primitive require is built from",
 		"VisibleBoardList":   "the filtered board list; it drops boards the caller cannot read rather than refusing, built on VisibleBoards",
+		"Groups":             "not board-scoped; guarded by requireGroupAdmin, a global check",
+		"CreateGroup":        "not board-scoped; guarded by requireGroupAdmin",
+		"UpdateGroup":        "not board-scoped; guarded by requireGroupAdmin",
+		"DeleteGroup":        "not board-scoped; guarded by requireGroupAdmin",
 	}
 
 	fset := token.NewFileSet()
 	var offenders []string
 	seen := map[string]bool{}
 
-	for _, name := range []string{"service.go", "access.go"} {
+	for _, name := range []string{"service.go", "access.go", "grants.go", "groups.go"} {
 		file, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
