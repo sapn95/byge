@@ -300,6 +300,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		plain(w, http.StatusConflict, service.ErrWIPLimit.Error())
 	case errors.Is(err, service.ErrNotAuthor):
 		plain(w, http.StatusForbidden, service.ErrNotAuthor.Error())
+	case errors.Is(err, service.ErrForbidden):
+		plain(w, http.StatusForbidden, service.ErrForbidden.Error())
 	case errors.Is(err, store.ErrInvalid):
 		plain(w, http.StatusBadRequest, "invalid request")
 	default:

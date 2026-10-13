@@ -375,7 +375,7 @@ func FuzzMarkdown(f *testing.F) {
 func TestThePagesRenderTheDescriptionAsMarkdown(t *testing.T) {
 	e := seeded(t)
 	const src = "Steps:\n\n- pull the **plug**\n- see [the runbook](https://example.com/r)"
-	if _, err := e.svc.UpdateCard(t.Context(), e.card.ID, service.CardInput{
+	if _, err := e.svc.UpdateCard(ownerCtx(), e.card.ID, service.CardInput{
 		Title: e.card.Title, Description: src,
 	}); err != nil {
 		t.Fatal(err)
@@ -404,7 +404,7 @@ func TestThePagesRenderTheDescriptionAsMarkdown(t *testing.T) {
 		t.Error("the edit form rendered the description into the textarea")
 	}
 
-	if err := e.svc.ArchiveCard(t.Context(), e.card.ID); err != nil {
+	if err := e.svc.ArchiveCard(ownerCtx(), e.card.ID); err != nil {
 		t.Fatal(err)
 	}
 	if archive := e.do("GET", "/b/demo/archive", nil).Body.String(); !strings.Contains(archive, "<strong>plug</strong>") {

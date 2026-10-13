@@ -32,10 +32,33 @@ var today = time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC)
 type env struct {
 	h     http.Handler
 	svc   *service.Byge
+	st    store.Store
 	board *model.Board
 	card  *model.Card
 	log   *bytes.Buffer
+	// user is the identity every request carries by default. Enforcement
+	// refuses an anonymous caller, and the pages this server draws sit behind
+	// a sign-in, so the realistic request is an identified one. A test that
+	// wants the no-identity path clears it or builds its own request.
+	user string
 }
+
+// ownerEmail is the default request identity and the owner of every board the
+// seeding helpers create, so an ordinary request in these tests holds the role
+// its page needs. CreateBoard self-grants this caller owner.
+const ownerEmail = "owner@example.com"
+
+// ownerCtx is the context the seeding helpers create a board under, so its
+// owner is the same address the requests carry.
+func ownerCtx() context.Context {
+	return identity.NewContext(context.Background(), identity.User{Email: ownerEmail})
+}
+
+// owner is the signed-in user a request-building test closure attaches when it
+// means "an ordinary authenticated write". The seeded board grants this
+// caller owner, so the write is allowed; a test that wants the no-identity or
+// a stranger path passes that identity explicitly instead.
+var owner = identity.User{Email: ownerEmail}
 
 func newEnv(t *testing.T, st store.Store, ready func(context.Context) error, opts ...Option) *env {
 	t.Helper()
@@ -46,13 +69,26 @@ func newEnv(t *testing.T, st store.Store, ready func(context.Context) error, opt
 	logBuf := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	h := New(svc, ready, logger, append([]Option{WithClock(func() time.Time { return today })}, opts...)...)
-	return &env{h: h, svc: svc, log: logBuf}
+	return &env{h: h, svc: svc, st: st, log: logBuf, user: ownerEmail}
+}
+
+// grant gives email a role on a board directly through the store, which is how
+// a test puts a second caller on a board before stage 4 adds a way to do it
+// through the service. The seeding helpers make owner@example.com the owner;
+// this is for the other callers a test needs.
+func (e *env) grant(t *testing.T, board model.ID, email string, role model.Role) {
+	t.Helper()
+	if err := e.st.SetGrant(ownerCtx(), &model.Grant{
+		BoardID: board, Principal: model.UserPrincipal(email), Role: role,
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func seeded(t *testing.T, opts ...Option) *env {
 	t.Helper()
 	e := newEnv(t, nil, nil, opts...)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := e.svc.CreateBoard(ctx, "Demo Board", "demo", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +118,9 @@ func (e *env) do(method, path string, body io.Reader, headers ...string) *httpte
 	}
 	for i := 0; i+1 < len(headers); i += 2 {
 		req.Header.Set(headers[i], headers[i+1])
+	}
+	if e.user != "" {
+		req = req.WithContext(identity.NewContext(req.Context(), identity.User{Email: e.user}))
 	}
 	rr := httptest.NewRecorder()
 	e.h.ServeHTTP(rr, req)
@@ -154,7 +193,7 @@ func TestBoardPage(t *testing.T) {
 func TestEveryColumnCarriesTheEmptyMessage(t *testing.T) {
 	e := seeded(t)
 	body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-	b, _ := e.svc.Board(context.Background(), "demo")
+	b, _ := e.svc.Board(ownerCtx(), "demo")
 	if n := strings.Count(body, `class="no-cards`); n != len(b.Columns) {
 		t.Errorf("%d empty messages for %d columns; CSS cannot decide what is not there", n, len(b.Columns))
 	}
@@ -195,7 +234,7 @@ func TestCreateCard(t *testing.T) {
 	if rr.Header().Get("HX-Retarget") != "#cards-"+string(col) || rr.Header().Get("HX-Reswap") != "beforeend" {
 		t.Fatalf("htmx headers = %v", rr.Header())
 	}
-	cards, _ := e.svc.Cards(context.Background(), e.board.ID)
+	cards, _ := e.svc.Cards(ownerCtx(), e.board.ID)
 	if len(cards) != 2 || cards[1].ColumnID != col || len(cards[1].Subtasks) != 2 || !cards[1].Subtasks[1].Done {
 		t.Fatalf("cards = %+v", cards)
 	}
@@ -205,7 +244,7 @@ func TestCreateCard(t *testing.T) {
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/b/demo" {
 		t.Fatalf("plain post: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
-	cards, _ = e.svc.Cards(context.Background(), e.board.ID)
+	cards, _ = e.svc.Cards(ownerCtx(), e.board.ID)
 	if len(cards) != 3 || cards[1].Title != "Plain" || cards[1].ColumnID != e.board.Columns[0].ID {
 		t.Fatalf("cards = %+v", cards)
 	}
@@ -216,7 +255,7 @@ func TestCreateCard(t *testing.T) {
 	want(t, e.do(http.MethodPost, "/b/demo/cards", form("title", "x", "due_date", "soon")), http.StatusBadRequest, "due_date")
 	want(t, e.do(http.MethodPost, "/b/demo/cards", strings.NewReader("%zz"), "Content-Type", "application/x-www-form-urlencoded"), http.StatusBadRequest, "bad form")
 
-	if err := e.svc.UpdateColumn(context.Background(), col, "In Progress", 1, false); err != nil {
+	if err := e.svc.UpdateColumn(ownerCtx(), col, "In Progress", 1, false); err != nil {
 		t.Fatal(err)
 	}
 	want(t, e.do(http.MethodPost, "/b/demo/cards", form("title", "over", "column", string(col))), http.StatusConflict, "WIP limit")
@@ -224,7 +263,7 @@ func TestCreateCard(t *testing.T) {
 
 func TestReorder(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	todo, doing := e.board.Columns[0].ID, e.board.Columns[1].ID
 	second, _ := e.svc.CreateCard(ctx, e.board.ID, todo, service.CardInput{Title: "Second"})
 
@@ -265,7 +304,7 @@ func TestReorder(t *testing.T) {
 // what this pins down is the contract it relies on.
 func TestReorderTakesCardsFromSeveralColumnsAtOnce(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	doing, done := e.board.Columns[1].ID, e.board.Columns[2].ID
 	inDoing, _ := e.svc.CreateCard(ctx, e.board.ID, doing, service.CardInput{Title: "In doing"})
 
@@ -402,6 +441,7 @@ func TestConcurrentRequests(t *testing.T) {
 
 func TestPagesShowTheSignedInUser(t *testing.T) {
 	e := seeded(t)
+	e.grant(t, e.board.ID, "someone@example.com", model.RoleRead)
 
 	tests := []struct {
 		name string
@@ -460,6 +500,7 @@ func TestAssigneeThroughTheForm(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cards/"+string(e.card.ID), strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -488,6 +529,7 @@ func TestAssigneeThroughTheForm(t *testing.T) {
 
 func TestAssigneeIsMarkedWhenItIsTheViewer(t *testing.T) {
 	e := seeded(t)
+	e.grant(t, e.board.ID, "someone@example.com", model.RoleWrite)
 	form := url.Values{"title": {"mine"}, "assignee": {"someone@example.com"}}
 	req := httptest.NewRequest(http.MethodPost, "/cards/"+string(e.card.ID), strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -517,14 +559,14 @@ func TestBulkEndpoint(t *testing.T) {
 
 	t.Run("delete removes the selected cards and asks for a refresh", func(t *testing.T) {
 		e := seeded(t)
-		rec := post(t, e, url.Values{"action": {"delete"}, "ids": {string(e.card.ID)}}, nil)
+		rec := post(t, e, url.Values{"action": {"delete"}, "ids": {string(e.card.ID)}}, &owner)
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
 		}
 		if rec.Header().Get("HX-Refresh") != "true" {
 			t.Error("the client was not told to refresh")
 		}
-		if _, err := e.svc.Card(context.Background(), e.card.ID); err == nil {
+		if _, err := e.svc.Card(ownerCtx(), e.card.ID); err == nil {
 			t.Error("the card survived a bulk delete")
 		}
 	})
@@ -538,15 +580,16 @@ func TestBulkEndpoint(t *testing.T) {
 		if rec := post(t, e, form, nil); rec.Code != http.StatusForbidden {
 			t.Errorf("anonymous status = %d, want 403", rec.Code)
 		}
-		if c, _ := e.svc.Card(context.Background(), e.card.ID); c.Assignee != "" {
+		if c, _ := e.svc.Card(ownerCtx(), e.card.ID); c.Assignee != "" {
 			t.Errorf("assignee = %q after an anonymous assign-to-me", c.Assignee)
 		}
 
 		u := identity.User{Email: "someone@example.com"}
+		e.grant(t, e.board.ID, u.Email, model.RoleWrite)
 		if rec := post(t, e, form, &u); rec.Code != http.StatusNoContent {
 			t.Fatalf("signed-in status = %d", rec.Code)
 		}
-		c, _ := e.svc.Card(context.Background(), e.card.ID)
+		c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 		if c.Assignee != "someone@example.com" {
 			t.Errorf("assignee = %q, want the signed-in address", c.Assignee)
 		}
@@ -554,25 +597,25 @@ func TestBulkEndpoint(t *testing.T) {
 
 	t.Run("an empty selection is a bad request", func(t *testing.T) {
 		e := seeded(t)
-		if rec := post(t, e, url.Values{"action": {"delete"}}, nil); rec.Code != http.StatusBadRequest {
+		if rec := post(t, e, url.Values{"action": {"delete"}}, &owner); rec.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400", rec.Code)
 		}
 	})
 
 	t.Run("an unknown action is a bad request", func(t *testing.T) {
 		e := seeded(t)
-		rec := post(t, e, url.Values{"action": {"burn"}, "ids": {string(e.card.ID)}}, nil)
+		rec := post(t, e, url.Values{"action": {"burn"}, "ids": {string(e.card.ID)}}, &owner)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400", rec.Code)
 		}
-		if _, err := e.svc.Card(context.Background(), e.card.ID); err != nil {
+		if _, err := e.svc.Card(ownerCtx(), e.card.ID); err != nil {
 			t.Error("an unknown action still touched the card")
 		}
 	})
 
 	t.Run("a card id from another board is not deleted", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		other, err := e.svc.CreateBoard(ctx, "Other", "other", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -583,7 +626,7 @@ func TestBulkEndpoint(t *testing.T) {
 		}
 		// Posted to /b/demo, so the handler must not reach across boards even
 		// though the id is real.
-		rec := post(t, e, url.Values{"action": {"delete"}, "ids": {string(victim.ID)}}, nil)
+		rec := post(t, e, url.Values{"action": {"delete"}, "ids": {string(victim.ID)}}, &owner)
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d", rec.Code)
 		}
@@ -600,6 +643,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cards/"+string(e.card.ID), strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		return rec
@@ -607,7 +651,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 
 	t.Run("a different column moves it and redraws", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := e.svc.Board(ctx, "demo")
 		if err != nil {
 			t.Fatal(err)
@@ -632,7 +676,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 
 	t.Run("the same column still swaps the card in place", func(t *testing.T) {
 		e := seeded(t)
-		b, _ := e.svc.Board(context.Background(), "demo")
+		b, _ := e.svc.Board(ownerCtx(), "demo")
 		rec := post(t, e, b.Columns[0].ID)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want the card fragment", rec.Code)
@@ -644,7 +688,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 
 	t.Run("a refused move leaves the card untouched", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, _ := e.svc.Board(ctx, "demo")
 		// A WIP limit of zero cards free: the move must be refused, and the
 		// title must not have been written either.
@@ -673,7 +717,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 
 	t.Run("a stale checklist line is refused before the move, not after it", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, _ := e.svc.Board(ctx, "demo")
 		target := b.Columns[1].ID
 		before, _ := e.svc.Card(ctx, e.card.ID)
@@ -695,6 +739,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cards/"+string(e.card.ID), strings.NewReader(body.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -711,7 +756,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 
 	t.Run("a label the board no longer has is refused before the move too", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, _ := e.svc.Board(ctx, "demo")
 		target := b.Columns[1].ID
 		before, _ := e.svc.Card(ctx, e.card.ID)
@@ -727,6 +772,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cards/"+string(e.card.ID), strings.NewReader(body.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		if rec.Code == http.StatusNoContent || rec.Code == http.StatusOK {
@@ -755,7 +801,7 @@ func TestEditFormMovesTheCard(t *testing.T) {
 // probe writes its own comment, because the handler's answer is a delete.
 func TestTheCommentBinAgreesWithTheHandler(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	callers := []identity.User{
 		{Email: "someone@example.com"},
 		{Email: "somebody.else@example.com"},
@@ -827,9 +873,12 @@ func TestCrossSiteWritesAreRefused(t *testing.T) {
 			}
 
 			// Same-origin still works: the middleware must not break the app.
+			// It carries an identity because enforcement would otherwise refuse
+			// the write for a reason that has nothing to do with the origin.
 			req = httptest.NewRequest(w.method, w.path, strings.NewReader(w.body))
 			req.Header.Set("Content-Type", w.ctype)
 			req.Header.Set("Sec-Fetch-Site", "same-origin")
+			req = req.WithContext(identity.NewContext(req.Context(), owner))
 			rec = httptest.NewRecorder()
 			e.h.ServeHTTP(rec, req)
 			if rec.Code == http.StatusForbidden {
@@ -844,6 +893,7 @@ func TestReadsAreNotRefusedCrossSite(t *testing.T) {
 	e := seeded(t)
 	req := httptest.NewRequest(http.MethodGet, "/b/demo", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req = req.WithContext(identity.NewContext(req.Context(), owner))
 	rec := httptest.NewRecorder()
 	e.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -887,6 +937,7 @@ func TestOversizedBodyIsRefused(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/boards", strings.NewReader(big))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req = req.WithContext(identity.NewContext(req.Context(), owner))
 	rec := httptest.NewRecorder()
 	e.h.ServeHTTP(rec, req)
 	if rec.Code == http.StatusSeeOther || rec.Code == http.StatusOK {
@@ -899,6 +950,7 @@ func TestArchiveThroughTheWeb(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, path, nil)
 		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		return rec
@@ -906,7 +958,7 @@ func TestArchiveThroughTheWeb(t *testing.T) {
 
 	t.Run("archiving takes it off the board but keeps it", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 
 		if rec := post(t, e, "/cards/"+string(e.card.ID)+"/archive"); rec.Code != http.StatusOK {
 			t.Fatalf("archive = %d: %s", rec.Code, rec.Body.String())
@@ -959,6 +1011,7 @@ func TestArchiveThroughTheWeb(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/b/demo/cards/bulk", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req = req.WithContext(identity.NewContext(req.Context(), owner))
 		rec := httptest.NewRecorder()
 		e.h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNoContent {
@@ -974,7 +1027,7 @@ func TestSearchTheArchive(t *testing.T) {
 	setup := func(t *testing.T) *env {
 		t.Helper()
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := e.svc.Board(ctx, "demo")
 		if err != nil {
 			t.Fatal(err)
@@ -1073,7 +1126,7 @@ func TestSearchTheArchive(t *testing.T) {
 // page and nothing would fail, so the markup is asserted here.
 func TestEverySettingsRowSaveIsMarked(t *testing.T) {
 	e := seeded(t)
-	b, err := e.svc.Board(context.Background(), "demo")
+	b, err := e.svc.Board(ownerCtx(), "demo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1162,7 @@ func TestSearchOnTheBoardURL(t *testing.T) {
 	setup := func(t *testing.T) *env {
 		t.Helper()
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := e.svc.Board(ctx, "demo")
 		if err != nil {
 			t.Fatal(err)
@@ -1200,6 +1253,11 @@ func TestCommentsThroughTheWeb(t *testing.T) {
 	setup := func(t *testing.T) (*env, string) {
 		t.Helper()
 		e := seeded(t)
+		// Both callers write and read comments on the board, so both need a
+		// role on it. The author rule, not the role, is what then decides who
+		// may remove a comment.
+		e.grant(t, e.board.ID, her, model.RoleWrite)
+		e.grant(t, e.board.ID, him, model.RoleWrite)
 		return e, "/cards/" + string(e.card.ID)
 	}
 
@@ -1278,7 +1336,7 @@ func TestCommentsThroughTheWeb(t *testing.T) {
 
 func comments(t *testing.T, e *env, card model.ID) []model.Comment {
 	t.Helper()
-	list, err := e.svc.Comments(context.Background(), card)
+	list, err := e.svc.Comments(ownerCtx(), card)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1351,7 +1409,7 @@ func TestBoardPalette(t *testing.T) {
 // no second label could be given it and the rows were different lengths.
 func TestEveryLabelRowOffersTheSameColours(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := e.svc.Board(ctx, "demo")
 	if err != nil {
 		t.Fatal(err)
@@ -1401,7 +1459,7 @@ func TestLabelsThroughTheWeb(t *testing.T) {
 		e := seeded(t)
 		want(t, post(e, "/b/demo/labels", form("name", "chore", "color", "#22c55e")), http.StatusSeeOther)
 
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1446,7 +1504,7 @@ func TestLabelsThroughTheWeb(t *testing.T) {
 
 	t.Run("a label from another board cannot be reached through this one", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		other, err := e.svc.CreateBoard(ctx, "Other", "other", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -1472,7 +1530,7 @@ func TestLabelsThroughTheWeb(t *testing.T) {
 		id := string(e.board.Labels[0].ID)
 		want(t, post(e, "/b/demo/labels/"+id+"/delete", nil), http.StatusSeeOther)
 
-		card, err := e.svc.Card(context.Background(), e.card.ID)
+		card, err := e.svc.Card(ownerCtx(), e.card.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1525,7 +1583,7 @@ func TestBoardShowsWhatIsPressing(t *testing.T) {
 
 	t.Run("a WIP limit is visible before a drop is refused", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		todo := e.board.Columns[0]
 
 		// One card in the column already, so a limit of 1 is a full column
@@ -1553,7 +1611,7 @@ func TestBoardShowsWhatIsPressing(t *testing.T) {
 
 	t.Run("an over-full column says by how much", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		todo := e.board.Columns[0]
 		if _, err := e.svc.CreateCard(ctx, e.board.ID, todo.ID, service.CardInput{Title: "second"}); err != nil {
 			t.Fatal(err)
@@ -1599,7 +1657,7 @@ func TestDueDatesAreGradedOnTheCardFace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := newEnv(t, nil, nil)
-			ctx := context.Background()
+			ctx := ownerCtx()
 			b, err := e.svc.CreateBoard(ctx, "Dates", "dates", nil)
 			if err != nil {
 				t.Fatal(err)
@@ -1621,7 +1679,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 	}
 	names := func(t *testing.T, e *env) []string {
 		t.Helper()
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1654,7 +1712,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 		e := seeded(t)
 		want(t, post(e, "/b/demo/columns", form("name", "Review", "wip_limit", "2")), http.StatusSeeOther)
 
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1669,7 +1727,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 		todo := e.board.Columns[0]
 		want(t, post(e, "/b/demo/columns/"+string(todo.ID), form("name", todo.Name, "wip_limit", "")), http.StatusSeeOther)
 
-		b, _ := e.svc.Board(context.Background(), "demo")
+		b, _ := e.svc.Board(ownerCtx(), "demo")
 		if b.Columns[0].WIPLimit != 0 {
 			t.Errorf("limit = %d, want 0 for an empty field", b.Columns[0].WIPLimit)
 		}
@@ -1713,7 +1771,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 		want(t, post(e, "/b/demo/columns/"+string(todo.ID)+"/delete",
 			form("move_to", string(done.ID))), http.StatusSeeOther)
 
-		card, err := e.svc.Card(context.Background(), e.card.ID)
+		card, err := e.svc.Card(ownerCtx(), e.card.ID)
 		if err != nil {
 			t.Fatalf("the card went with the column: %v", err)
 		}
@@ -1729,14 +1787,14 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 		e := seeded(t)
 		todo := e.board.Columns[0]
 		want(t, post(e, "/b/demo/columns/"+string(todo.ID)+"/delete", form("move_to", "")), http.StatusSeeOther)
-		if _, err := e.svc.Card(context.Background(), e.card.ID); err == nil {
+		if _, err := e.svc.Card(ownerCtx(), e.card.ID); err == nil {
 			t.Error("the card survived a delete with nowhere to move it")
 		}
 	})
 
 	t.Run("a column that filled up after the page was drawn keeps its cards", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		// The settings page asks where the cards go only when the column has
 		// some, so a form drawn over an empty column carries no answer, and no
 		// answer used to mean "delete them too". It now names a destination,
@@ -1774,7 +1832,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 
 	t.Run("the last column cannot go", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := e.svc.CreateBoard(ctx, "Single", "single", []string{"Only"})
 		if err != nil {
 			t.Fatal(err)
@@ -1785,7 +1843,7 @@ func TestColumnsThroughTheWeb(t *testing.T) {
 
 	t.Run("a column from another board cannot be reached through this one", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		other, err := e.svc.CreateBoard(ctx, "Other", "other", []string{"Theirs"})
 		if err != nil {
 			t.Fatal(err)
@@ -1872,7 +1930,7 @@ func TestReadableOn(t *testing.T) {
 
 func TestLabelsAreLegibleOnACard(t *testing.T) {
 	e := newEnv(t, nil, nil)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := e.svc.CreateBoard(ctx, "Legible", "legible", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1910,7 +1968,7 @@ func TestALabelChipSearchesForItsOwnLabel(t *testing.T) {
 	setup := func(t *testing.T) *env {
 		t.Helper()
 		e := seeded(t) // "First card" carries the label "bug"
-		ctx := context.Background()
+		ctx := ownerCtx()
 		b, err := e.svc.Board(ctx, "demo")
 		if err != nil {
 			t.Fatal(err)
@@ -1960,7 +2018,7 @@ func TestALabelChipSearchesForItsOwnLabel(t *testing.T) {
 		if strings.Contains(rr.Body.String(), `q=label:%22bug%22`) {
 			t.Error("the chip is still on the card the label was taken off")
 		}
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2000,7 +2058,7 @@ func TestALabelChipSearchesForItsOwnLabel(t *testing.T) {
 
 	t.Run("a chip in the archive keeps you in the archive", func(t *testing.T) {
 		e := setup(t)
-		if err := e.svc.ArchiveCard(context.Background(), e.card.ID); err != nil {
+		if err := e.svc.ArchiveCard(ownerCtx(), e.card.ID); err != nil {
 			t.Fatal(err)
 		}
 		body := e.do(http.MethodGet, "/b/demo/archive", nil).Body.String()
@@ -2077,7 +2135,7 @@ func TestAvatarsAreServedFromThisOrigin(t *testing.T) {
 		e := seeded(t,
 			WithAvatars(map[string]string{"Somebody@Example.com": "sapn95"}),
 			withAvatarHost(github.URL))
-		if _, err := e.svc.SetCardAssignee(context.Background(), e.card.ID, "somebody@example.com"); err != nil {
+		if _, err := e.svc.SetCardAssignee(ownerCtx(), e.card.ID, "somebody@example.com"); err != nil {
 			t.Fatal(err)
 		}
 		return e, hits
@@ -2167,6 +2225,7 @@ func TestAvatarsAreServedFromThisOrigin(t *testing.T) {
 
 	t.Run("the signed-in person has one in the header too", func(t *testing.T) {
 		e, _ := setup(t, servePNG)
+		e.grant(t, e.board.ID, "somebody@example.com", model.RoleRead)
 		// The card face was the first place this landed and for a while the
 		// only one, so the viewer's own bubble in the header kept its initials.
 		// Its classes are the anchor: no card renders that combination.
@@ -2197,7 +2256,7 @@ func TestAvatarsAreServedFromThisOrigin(t *testing.T) {
 
 	t.Run("without the option there are no pictures and no route", func(t *testing.T) {
 		e := seeded(t)
-		if _, err := e.svc.SetCardAssignee(context.Background(), e.card.ID, "somebody@example.com"); err != nil {
+		if _, err := e.svc.SetCardAssignee(ownerCtx(), e.card.ID, "somebody@example.com"); err != nil {
 			t.Fatal(err)
 		}
 		if rr := e.do(http.MethodGet, "/avatar/sapn95", nil); rr.Code != http.StatusNotFound {
@@ -2278,7 +2337,7 @@ func TestBoardLayout(t *testing.T) {
 		if !strings.Contains(body, `value="columns"`) {
 			t.Error("the button does not offer the way back")
 		}
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2292,7 +2351,7 @@ func TestBoardLayout(t *testing.T) {
 	t.Run("an unknown layout is refused and changes nothing", func(t *testing.T) {
 		e := seeded(t)
 		want(t, post(e, "/b/demo/layout", form("layout", "spiral")), http.StatusBadRequest)
-		b, _ := e.svc.Board(context.Background(), "demo")
+		b, _ := e.svc.Board(ownerCtx(), "demo")
 		if b.Layout != model.LayoutColumns {
 			t.Errorf("layout = %q after a refused change, want it untouched", b.Layout)
 		}
@@ -2318,7 +2377,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 	}
 	assignee := func(t *testing.T, e *env) string {
 		t.Helper()
-		c, err := e.svc.Card(context.Background(), e.card.ID)
+		c, err := e.svc.Card(ownerCtx(), e.card.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2326,7 +2385,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 	}
 	dueDate := func(t *testing.T, e *env) time.Time {
 		t.Helper()
-		c, err := e.svc.Card(context.Background(), e.card.ID)
+		c, err := e.svc.Card(ownerCtx(), e.card.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2346,7 +2405,8 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("the menu offers the people already on the board, the viewer first", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		e.grant(t, e.board.ID, her, model.RoleRead)
+		ctx := ownerCtx()
 		for _, who := range []string{him, "zoe@example.com"} {
 			if _, err := e.svc.CreateCard(ctx, e.board.ID, e.board.Columns[0].ID,
 				service.CardInput{Title: "for " + who, Assignee: who}); err != nil {
@@ -2374,14 +2434,14 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("picking somebody assigns them and redraws the card", func(t *testing.T) {
 		e := seeded(t)
-		want(t, post(t, e, "", "/cards/"+string(e.card.ID)+"/assignee", form("assignee", him)),
+		want(t, post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/assignee", form("assignee", him)),
 			http.StatusOK, `id="card-`+string(e.card.ID), him)
 		if got := assignee(t, e); got != him {
 			t.Errorf("assignee = %q, want %q", got, him)
 		}
 		// One field, and nothing else: that is the whole reason this is not the
 		// edit form with most of its inputs missing.
-		c, _ := e.svc.Card(context.Background(), e.card.ID)
+		c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 		if c.Title != "First card" || len(c.Labels) != 1 || len(c.Subtasks) != 2 {
 			t.Errorf("the quick edit disturbed the rest of the card: %+v", c)
 		}
@@ -2389,6 +2449,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("the server resolves the viewer, and refuses to guess", func(t *testing.T) {
 		e := seeded(t)
+		e.grant(t, e.board.ID, her, model.RoleWrite)
 		want(t, post(t, e, her, "/cards/"+string(e.card.ID)+"/assignee", form("assignee", "@me")),
 			http.StatusOK, her)
 		if got := assignee(t, e); got != her {
@@ -2404,8 +2465,8 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("unassigning clears it", func(t *testing.T) {
 		e := seeded(t)
-		want(t, post(t, e, "", "/cards/"+string(e.card.ID)+"/assignee", form("assignee", him)), http.StatusOK)
-		body := post(t, e, "", "/cards/"+string(e.card.ID)+"/assignee", form("assignee", "")).Body.String()
+		want(t, post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/assignee", form("assignee", him)), http.StatusOK)
+		body := post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/assignee", form("assignee", "")).Body.String()
 		if strings.Contains(body, him) {
 			t.Error("the assignee survived being cleared from the card face")
 		}
@@ -2416,7 +2477,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("the date is set from the card face, whether or not it has one", func(t *testing.T) {
 		e := seeded(t)
-		blank, err := e.svc.CreateCard(context.Background(), e.board.ID, e.board.Columns[0].ID,
+		blank, err := e.svc.CreateCard(ownerCtx(), e.board.ID, e.board.Columns[0].ID,
 			service.CardInput{Title: "no date yet"})
 		if err != nil {
 			t.Fatal(err)
@@ -2435,13 +2496,13 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("picking a date sets it and redraws the card", func(t *testing.T) {
 		e := seeded(t)
-		want(t, post(t, e, "", "/cards/"+string(e.card.ID)+"/due", form("due_date", "2026-12-24")),
+		want(t, post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/due", form("due_date", "2026-12-24")),
 			http.StatusOK, `id="card-`+string(e.card.ID), "24 Dec 2026")
 		if got := dueDate(t, e).Format("2006-01-02"); got != "2026-12-24" {
 			t.Errorf("due date = %s, want 2026-12-24", got)
 		}
 		// One field, same as the assignee: the rest of the card is not sent.
-		c, _ := e.svc.Card(context.Background(), e.card.ID)
+		c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 		if c.Title != "First card" || len(c.Labels) != 1 || len(c.Subtasks) != 2 {
 			t.Errorf("the picker disturbed the rest of the card: %+v", c)
 		}
@@ -2449,7 +2510,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("clearing takes the date off and leaves a way back", func(t *testing.T) {
 		e := seeded(t)
-		body := post(t, e, "", "/cards/"+string(e.card.ID)+"/due", form("due_date", "")).Body.String()
+		body := post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/due", form("due_date", "")).Body.String()
 		if strings.Contains(body, "Sep 2026") {
 			t.Error("the date survived being cleared from the card face")
 		}
@@ -2463,7 +2524,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("a date the picker could not have sent is refused", func(t *testing.T) {
 		e := seeded(t)
-		want(t, post(t, e, "", "/cards/"+string(e.card.ID)+"/due", form("due_date", "24.12.2026")),
+		want(t, post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/due", form("due_date", "24.12.2026")),
 			http.StatusBadRequest)
 		if got := dueDate(t, e).Format("2006-01-02"); got != "2026-09-01" {
 			t.Errorf("due date = %s after a refused post, want it untouched", got)
@@ -2474,16 +2535,16 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 		e := seeded(t)
 		card, label := string(e.card.ID), string(e.board.Labels[0].ID)
 		labels := func() []model.ID {
-			c, _ := e.svc.Card(context.Background(), e.card.ID)
+			c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 			return c.Labels
 		}
 
 		// The seeded card already carries it, so the first click takes it off.
-		want(t, post(t, e, "", "/cards/"+card+"/labels/"+label+"/toggle", nil), http.StatusOK)
+		want(t, post(t, e, ownerEmail, "/cards/"+card+"/labels/"+label+"/toggle", nil), http.StatusOK)
 		if got := labels(); len(got) != 0 {
 			t.Errorf("labels = %v, want none", got)
 		}
-		want(t, post(t, e, "", "/cards/"+card+"/labels/"+label+"/toggle", nil), http.StatusOK, "bug")
+		want(t, post(t, e, ownerEmail, "/cards/"+card+"/labels/"+label+"/toggle", nil), http.StatusOK, "bug")
 		if got := labels(); len(got) != 1 || got[0] != model.ID(label) {
 			t.Errorf("labels = %v, want the bug label back", got)
 		}
@@ -2491,7 +2552,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 
 	t.Run("a label from another board is refused", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		other, err := e.svc.CreateBoard(ctx, "Other", "other", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -2500,7 +2561,7 @@ func TestQuickEditOnTheCardFace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want(t, post(t, e, "", "/cards/"+string(e.card.ID)+"/labels/"+string(theirs.ID)+"/toggle", nil),
+		want(t, post(t, e, ownerEmail, "/cards/"+string(e.card.ID)+"/labels/"+string(theirs.ID)+"/toggle", nil),
 			http.StatusNotFound)
 		c, _ := e.svc.Card(ctx, e.card.ID)
 		if len(c.Labels) != 1 {
@@ -2525,7 +2586,7 @@ func TestFooterIsOnEveryPage(t *testing.T) {
 	e := seeded(t, WithBuild("2.2.1", "abcdef0"))
 	// A second board, so the index is a page rather than a redirect to the only
 	// board there is.
-	if _, err := e.svc.CreateBoard(context.Background(), "Other", "", nil); err != nil {
+	if _, err := e.svc.CreateBoard(ownerCtx(), "Other", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/", "/b/demo", "/b/demo/settings", "/b/demo/archive"} {
@@ -2589,7 +2650,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 		e := seeded(t)
 		want(t, post(e, "/b/demo/sla", week("response_hours", "4")), http.StatusSeeOther)
 
-		b, err := e.svc.Board(context.Background(), "demo")
+		b, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2613,7 +2674,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 		want(t, post(e, "/b/demo/sla", week("response_hours", "2", "start", "00:00", "end", "00:00",
 			"days", "mon", "days", "tue", "days", "wed", "days", "thu", "days", "fri",
 			"days", "sat", "days", "sun")), http.StatusSeeOther)
-		b, _ := e.svc.Board(context.Background(), "demo")
+		b, _ := e.svc.Board(ownerCtx(), "demo")
 		if b.SLA.Start != 0 || b.SLA.End != model.MinutesPerDay || b.SLA.Days != model.AllDays {
 			t.Fatalf("stored sla = %+v, want the whole week from midnight to midnight", b.SLA)
 		}
@@ -2630,7 +2691,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 		// The same form, submitted with the switch off: the hours are still in
 		// the box and are still ignored.
 		want(t, post(e, "/b/demo/sla", week("on", "")), http.StatusSeeOther)
-		b, _ := e.svc.Board(context.Background(), "demo")
+		b, _ := e.svc.Board(ownerCtx(), "demo")
 		if b.SLA.ResponseHours != 0 || b.SLA.Start != 8*60 || b.SLA.Zone != "Europe/Zurich" {
 			t.Errorf("stored sla = %+v, want the office hours kept and the clock off", b.SLA)
 		}
@@ -2646,7 +2707,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 
 		// And back on, with the number the form was already showing.
 		want(t, post(e, "/b/demo/sla", week("response_hours", "8")), http.StatusSeeOther)
-		if b, _ = e.svc.Board(context.Background(), "demo"); b.SLA.ResponseHours != 8 {
+		if b, _ = e.svc.Board(ownerCtx(), "demo"); b.SLA.ResponseHours != 8 {
 			t.Errorf("stored sla = %+v, want the promise back at 8", b.SLA)
 		}
 	})
@@ -2674,7 +2735,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 	// on offer, so saving the form does not quietly change it.
 	t.Run("a zone from somewhere else is not dropped", func(t *testing.T) {
 		e := seeded(t)
-		if err := e.svc.SetBoardSLA(context.Background(), e.board.ID, model.SLA{
+		if err := e.svc.SetBoardSLA(ownerCtx(), e.board.ID, model.SLA{
 			ResponseHours: 4, Days: model.MonToFri, Start: 8 * 60, End: 17 * 60, Zone: "US/Eastern",
 		}); err != nil {
 			t.Fatal(err)
@@ -2702,7 +2763,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 				// The settings page comes back with the reason on it rather
 				// than a bare 400, because the form it belongs to is there.
 				want(t, rr, http.StatusBadRequest, tc.says, `action="/b/demo/sla"`)
-				b, _ := e.svc.Board(context.Background(), "demo")
+				b, _ := e.svc.Board(ownerCtx(), "demo")
 				if b.SLA.Enabled() {
 					t.Errorf("a refused form switched the clock on: %+v", b.SLA)
 				}
@@ -2715,7 +2776,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 		// weekday the fixed test clock happens to be.
 		open := func(e *env) {
 			t.Helper()
-			if err := e.svc.SetBoardSLA(context.Background(), e.board.ID, model.SLA{
+			if err := e.svc.SetBoardSLA(ownerCtx(), e.board.ID, model.SLA{
 				ResponseHours: 4, Days: model.AllDays, End: model.MinutesPerDay,
 			}); err != nil {
 				t.Fatal(err)
@@ -2745,7 +2806,7 @@ func TestSLAThroughTheWeb(t *testing.T) {
 		t.Run("the clock does not run in a column that stops it", func(t *testing.T) {
 			e := seeded(t, WithClock(func() time.Time { return today.Add(48 * time.Hour) }))
 			open(e)
-			ctx := context.Background()
+			ctx := ownerCtx()
 			col := e.board.Columns[0]
 			if err := e.svc.UpdateColumn(ctx, col.ID, col.Name, 0, true); err != nil {
 				t.Fatal(err)
@@ -2795,7 +2856,7 @@ func TestColumnHeadersComeBackWithEveryWrite(t *testing.T) {
 
 	t.Run("a full column says so in the header it sends back", func(t *testing.T) {
 		e := seeded(t)
-		ctx := context.Background()
+		ctx := ownerCtx()
 		todo := e.board.Columns[0]
 		if err := e.svc.UpdateColumn(ctx, todo.ID, todo.Name, 1, false); err != nil {
 			t.Fatal(err)
@@ -2969,7 +3030,7 @@ func TestGettingToAnotherBoard(t *testing.T) {
 	})
 
 	t.Run("the app bar switches boards", func(t *testing.T) {
-		if _, err := e.svc.CreateBoard(context.Background(), "Other", "", nil); err != nil {
+		if _, err := e.svc.CreateBoard(ownerCtx(), "Other", "", nil); err != nil {
 			t.Fatal(err)
 		}
 		for _, path := range []string{"/b/demo", "/b/demo/settings", "/b/demo/archive"} {
@@ -2997,9 +3058,12 @@ func TestGettingToAnotherBoard(t *testing.T) {
 	})
 }
 
-// A service token is a caller and not a person: it gets through a board that
-// requires an identity, and "@me" still has nobody to mean.
-func TestAMachineCallerHasNoAtMe(t *testing.T) {
+// A service token is a caller and not a person, and enforcement gives it no
+// role: it holds no principals, so a board-scoped request is refused whether it
+// reads or writes. This is the hole stage 3 closes — a machine credential that
+// reached every board the moment grants existed. The identity middleware still
+// lets it past AUTH_REQUIRED (it is not anonymous); the service is what refuses.
+func TestAMachineCallerHasNoRole(t *testing.T) {
 	e := seeded(t)
 	machine := func(method, path string, body io.Reader) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, body)
@@ -3013,14 +3077,14 @@ func TestAMachineCallerHasNoAtMe(t *testing.T) {
 		return rr
 	}
 
-	t.Run("it can read the board", func(t *testing.T) {
-		want(t, machine(http.MethodGet, "/b/demo", nil), http.StatusOK, "First card")
+	t.Run("reading the board is refused", func(t *testing.T) {
+		want(t, machine(http.MethodGet, "/b/demo", nil), http.StatusForbidden)
 	})
 
 	t.Run("assigning to @me is refused", func(t *testing.T) {
 		rr := machine(http.MethodPost, "/cards/"+string(e.card.ID)+"/assignee", form("assignee", "@me"))
-		want(t, rr, http.StatusForbidden, "not signed in")
-		c, _ := e.svc.Card(context.Background(), e.card.ID)
+		want(t, rr, http.StatusForbidden)
+		c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 		if c.Assignee != "" {
 			t.Errorf("assignee = %q, want it left alone", c.Assignee)
 		}
@@ -3029,18 +3093,16 @@ func TestAMachineCallerHasNoAtMe(t *testing.T) {
 	t.Run("and so is a bulk assign to @me", func(t *testing.T) {
 		body := url.Values{"action": {"assign"}, "target": {"@me"}, "ids": {string(e.card.ID)}}
 		want(t, machine(http.MethodPost, "/b/demo/cards/bulk", strings.NewReader(body.Encode())),
-			http.StatusForbidden, "not signed in")
+			http.StatusForbidden)
 	})
 
-	t.Run("a card it writes carries no address", func(t *testing.T) {
+	t.Run("writing a card is refused and the board is unchanged", func(t *testing.T) {
 		rr := machine(http.MethodPost, "/b/demo/cards", form("title", "from a cron job"))
-		if rr.Code != http.StatusSeeOther && rr.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", rr.Code, rr.Body.String())
-		}
-		cards, _ := e.svc.Cards(context.Background(), e.board.ID)
+		want(t, rr, http.StatusForbidden)
+		cards, _ := e.svc.Cards(ownerCtx(), e.board.ID)
 		for _, c := range cards {
-			if c.Title == "from a cron job" && c.Assignee != "" {
-				t.Errorf("assignee = %q, want nobody", c.Assignee)
+			if c.Title == "from a cron job" {
+				t.Error("a service token wrote a card to a board it holds no role on")
 			}
 		}
 	})
@@ -3056,6 +3118,7 @@ func TestViewerRoster(t *testing.T) {
 
 	t.Run("every name and address is on the page", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
+		e.grant(t, e.board.ID, "ada@example.com", model.RoleRead)
 		body := e.doAs("ada@example.com", http.MethodGet, "/b/demo", nil).Body.String()
 		for _, want := range []string{
 			"Who can see this board",
@@ -3072,6 +3135,7 @@ func TestViewerRoster(t *testing.T) {
 
 	t.Run("and says it decides nothing", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
+		e.grant(t, e.board.ID, "ada@example.com", model.RoleRead)
 		body := e.doAs("ada@example.com", http.MethodGet, "/b/demo", nil).Body.String()
 		if !strings.Contains(body, "decides who gets in") {
 			t.Error("the panel does not say the sign-in is what admits anybody")
@@ -3081,7 +3145,10 @@ func TestViewerRoster(t *testing.T) {
 	t.Run("no roster, no panel", func(t *testing.T) {
 		e := seeded(t)
 		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-		if strings.Contains(body, "Who can see this board") {
+		// The signed-in user's own menu carries the phrase in its summary
+		// tooltip, so the roster panel is identified by its own copy, which
+		// only renders inside {{if $viewers}}.
+		if strings.Contains(body, "decides who gets in") {
 			t.Error("a board with no roster offers the panel anyway")
 		}
 	})
@@ -3091,6 +3158,7 @@ func TestViewerRoster(t *testing.T) {
 	// and that caller does not get it.
 	t.Run("nobody signed in, no roster", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
+		e.user = "" // a genuinely unidentified caller, not the default owner
 		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
 		for _, leaked := range []string{"Ada Lovelace", "ada@example.com", "Who can see this board"} {
 			if strings.Contains(body, leaked) {
@@ -3105,7 +3173,7 @@ func TestDeleteBoard(t *testing.T) {
 	newEnv := func(t *testing.T) *env {
 		t.Helper()
 		e := seeded(t)
-		if _, err := e.svc.CreateBoard(context.Background(), "Scratch", "scratch", nil); err != nil {
+		if _, err := e.svc.CreateBoard(ownerCtx(), "Scratch", "scratch", nil); err != nil {
 			t.Fatal(err)
 		}
 		return e
@@ -3117,7 +3185,7 @@ func TestDeleteBoard(t *testing.T) {
 		if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/boards" {
 			t.Fatalf("got %d to %q, want 303 to /boards", rr.Code, rr.Header().Get("Location"))
 		}
-		boards, err := e.svc.Boards(context.Background())
+		boards, err := e.svc.Boards(ownerCtx())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3141,7 +3209,7 @@ func TestDeleteBoard(t *testing.T) {
 		if !strings.Contains(rr.Body.String(), "type its name") {
 			t.Error("the page does not say why nothing happened")
 		}
-		if _, err := e.svc.Board(context.Background(), "scratch"); err != nil {
+		if _, err := e.svc.Board(ownerCtx(), "scratch"); err != nil {
 			t.Errorf("the board went anyway: %v", err)
 		}
 	})
@@ -3151,27 +3219,27 @@ func TestDeleteBoard(t *testing.T) {
 		if rr := e.do(http.MethodPost, "/b/scratch/delete", form("confirm", "")); rr.Code != http.StatusBadRequest {
 			t.Errorf("got %d for an empty confirmation, want 400", rr.Code)
 		}
-		if _, err := e.svc.Board(context.Background(), "scratch"); err != nil {
+		if _, err := e.svc.Board(ownerCtx(), "scratch"); err != nil {
 			t.Errorf("the board went anyway: %v", err)
 		}
 	})
 
 	t.Run("the cards go with it", func(t *testing.T) {
 		e := newEnv(t)
-		b, err := e.svc.Board(context.Background(), "scratch")
+		b, err := e.svc.Board(ownerCtx(), "scratch")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.svc.CreateCard(context.Background(), b.ID, b.Columns[0].ID,
+		if _, err := e.svc.CreateCard(ownerCtx(), b.ID, b.Columns[0].ID,
 			service.CardInput{Title: "goes with the board"}); err != nil {
 			t.Fatal(err)
 		}
 		if rr := e.do(http.MethodPost, "/b/scratch/delete", form("confirm", "Scratch")); rr.Code != http.StatusSeeOther {
 			t.Fatalf("got %d, want 303", rr.Code)
 		}
-		if _, err := e.svc.Cards(context.Background(), b.ID); err == nil {
+		if _, err := e.svc.Cards(ownerCtx(), b.ID); err == nil {
 			// A store that answers for a deleted board would leave orphans.
-			if cards, _ := e.svc.Cards(context.Background(), b.ID); len(cards) != 0 {
+			if cards, _ := e.svc.Cards(ownerCtx(), b.ID); len(cards) != 0 {
 				t.Errorf("%d card(s) outlived the board", len(cards))
 			}
 		}
@@ -3199,7 +3267,7 @@ func TestSetSubtaskDoneFromTheCardFace(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("got %d, want 200", rr.Code)
 		}
-		c, err := e.svc.Card(context.Background(), e.card.ID)
+		c, err := e.svc.Card(ownerCtx(), e.card.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3215,7 +3283,7 @@ func TestSetSubtaskDoneFromTheCardFace(t *testing.T) {
 		e := seeded(t)
 		id := e.card.Subtasks[0].ID // "sub one", already done
 		e.do(http.MethodPost, "/cards/"+string(e.card.ID)+"/subtasks/"+string(id)+"/toggle", nil)
-		c, _ := e.svc.Card(context.Background(), e.card.ID)
+		c, _ := e.svc.Card(ownerCtx(), e.card.ID)
 		if c.Subtasks[0].Done {
 			t.Error("a done subtask stayed done")
 		}
@@ -3271,6 +3339,10 @@ func TestSameSiteIsNotEnough(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/b/demo/layout", form("layout", "rows"))
 			req.Host = "example.com"
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			// The owner of the seeded board: a layout change is an owner
+			// operation, so the request that is meant to get past the
+			// cross-site check still needs the role to reach the handler.
+			req = req.WithContext(identity.NewContext(req.Context(), owner))
 			if tc.site != "" {
 				req.Header.Set("Sec-Fetch-Site", tc.site)
 			}
@@ -3305,7 +3377,7 @@ func TestSubtaskIDsSurviveASave(t *testing.T) {
 		t.Fatalf("got %d, want 303", rr.Code)
 	}
 
-	c, err := e.svc.Card(context.Background(), e.card.ID)
+	c, err := e.svc.Card(ownerCtx(), e.card.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3353,7 +3425,7 @@ func TestServiceWorkerCacheNameFollowsTheBuild(t *testing.T) {
 // console on every delete.
 func TestDeleteFromTheArchiveSendsNoHeaders(t *testing.T) {
 	e := seeded(t)
-	if err := e.svc.ArchiveCard(context.Background(), e.card.ID); err != nil {
+	if err := e.svc.ArchiveCard(ownerCtx(), e.card.ID); err != nil {
 		t.Fatal(err)
 	}
 	rr := e.do(http.MethodPost, "/cards/"+string(e.card.ID)+"/delete", nil,
@@ -3379,7 +3451,7 @@ func TestDeleteFromTheArchiveSendsNoHeaders(t *testing.T) {
 // either way, so a move a WIP limit refused looked exactly like one that worked.
 func TestBulkSaysWhatItRefused(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := e.svc.Board(ctx, "demo")
 	if err != nil {
 		t.Fatal(err)
@@ -3438,7 +3510,7 @@ func TestClearingTheResponseHoursIsRefused(t *testing.T) {
 	if rr.Code != http.StatusSeeOther {
 		t.Fatalf("turning the switch off answered %d, want 303", rr.Code)
 	}
-	b, err := e.svc.Board(context.Background(), "demo")
+	b, err := e.svc.Board(ownerCtx(), "demo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3456,7 +3528,7 @@ func TestArchiveDetectionSurvivesASearch(t *testing.T) {
 		"https://board.example/b/demo/archive/?q=is%3Aarchived+bug",
 	} {
 		e := seeded(t)
-		if err := e.svc.ArchiveCard(context.Background(), e.card.ID); err != nil {
+		if err := e.svc.ArchiveCard(ownerCtx(), e.card.ID); err != nil {
 			t.Fatal(err)
 		}
 		rr := e.do(http.MethodPost, "/cards/"+string(e.card.ID)+"/delete", nil,
@@ -3488,7 +3560,7 @@ func TestSearchPageGetsNoColumnFragments(t *testing.T) {
 			t.Errorf("HX-Retarget = %q, at a list the search page does not draw", rr.Header().Get("HX-Retarget"))
 		}
 		// And the card really was made.
-		cards, err := e.svc.Cards(context.Background(), e.board.ID)
+		cards, err := e.svc.Cards(ownerCtx(), e.board.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3615,7 +3687,7 @@ func TestTickingTwiceIsTickedOnce(t *testing.T) {
 			t.Fatalf("got %d, want 200", rr.Code)
 		}
 	}
-	c, err := e.svc.Card(context.Background(), e.card.ID)
+	c, err := e.svc.Card(ownerCtx(), e.card.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3627,14 +3699,14 @@ func TestTickingTwiceIsTickedOnce(t *testing.T) {
 	for range 2 {
 		e.do(http.MethodPost, path, form("done", "false"), "HX-Request", "true")
 	}
-	if c, _ = e.svc.Card(context.Background(), e.card.ID); c.Subtasks[1].Done {
+	if c, _ = e.svc.Card(ownerCtx(), e.card.ID); c.Subtasks[1].Done {
 		t.Error("unticking twice ticked it")
 	}
 
 	// Without the field it is still a flip, which is what a page from before
 	// this change posts.
 	e.do(http.MethodPost, path, nil, "HX-Request", "true")
-	if c, _ = e.svc.Card(context.Background(), e.card.ID); !c.Subtasks[1].Done {
+	if c, _ = e.svc.Card(ownerCtx(), e.card.ID); !c.Subtasks[1].Done {
 		t.Error("a request with no state did not flip the line")
 	}
 
@@ -3650,7 +3722,7 @@ func TestTickingTwiceIsTickedOnce(t *testing.T) {
 // posts with nothing on screen until the redirect lands.
 func TestMovingAColumnTwiceMovesItOnce(t *testing.T) {
 	e := seeded(t)
-	b, err := e.svc.Board(context.Background(), "demo")
+	b, err := e.svc.Board(ownerCtx(), "demo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3658,7 +3730,7 @@ func TestMovingAColumnTwiceMovesItOnce(t *testing.T) {
 		t.Fatalf("this test wants three columns, the board has %d", len(b.Columns))
 	}
 	names := func() []string {
-		cur, err := e.svc.Board(context.Background(), "demo")
+		cur, err := e.svc.Board(ownerCtx(), "demo")
 		if err != nil {
 			t.Fatal(err)
 		}
