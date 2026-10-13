@@ -86,10 +86,10 @@
         "tags": [
           "boards"
         ],
-        "summary": "Every board.",
+        "summary": "The boards the caller may read.",
         "responses": {
           "200": {
-            "description": "The boards, each with its columns and labels.",
+            "description": "The boards the caller holds a role on, each with its columns and labels.",
             "content": {
               "application/json": {
                 "schema": {

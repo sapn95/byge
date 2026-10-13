@@ -172,6 +172,41 @@ func TestVisibleBoards(t *testing.T) {
 	}
 }
 
+// VisibleBoardList is Boards filtered to what the caller may read: the list a
+// layer draws, as opposed to Boards which lists every board regardless of role.
+// A caller holding one grant gets that one board; a caller holding nothing gets
+// an empty list and not every board.
+func TestVisibleBoardList(t *testing.T) {
+	k := newSvc(t)
+	one := mustMakeBoard(t, k, "One")
+	mustMakeBoard(t, k, "Two")
+	mustMakeBoard(t, k, "Three")
+
+	ada := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
+	grant(t, k, one.ID, model.UserPrincipal("ada@example.com"), model.RoleRead)
+
+	list, err := k.VisibleBoardList(ada)
+	if err != nil {
+		t.Fatalf("VisibleBoardList: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != one.ID {
+		t.Errorf("VisibleBoardList = %+v, want only %q", list, one.ID)
+	}
+
+	// A caller who holds nothing sees nothing, even though three boards exist.
+	// Boards would hand all three back; this is the method that does not.
+	list, err = k.VisibleBoardList(context.Background())
+	if err != nil {
+		t.Fatalf("VisibleBoardList(nobody): %v", err)
+	}
+	if len(list) != 0 {
+		t.Errorf("VisibleBoardList(nobody) = %+v, want none", list)
+	}
+	if all, _ := k.Boards(context.Background()); len(all) != 3 {
+		t.Errorf("Boards = %d, the filter must be VisibleBoardList and not Boards", len(all))
+	}
+}
+
 // readerCtx, writerCtx and ownerBoard set up the one shape every method in the
 // matrix below needs: a board owned by owner@example.com (mustMakeBoard does
 // that) with one more caller granted a single role on it. The caller is a

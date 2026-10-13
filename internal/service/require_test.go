@@ -38,6 +38,7 @@ func TestEveryBoardScopedMethodRequires(t *testing.T) {
 		"Principals":         "an access primitive require is built from",
 		"RoleOn":             "an access primitive require is built from",
 		"VisibleBoards":      "an access primitive require is built from",
+		"VisibleBoardList":   "the filtered board list; it drops boards the caller cannot read rather than refusing, built on VisibleBoards",
 	}
 
 	fset := token.NewFileSet()

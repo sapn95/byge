@@ -75,6 +75,36 @@ func (k *Byge) VisibleBoards(ctx context.Context, u identity.User) (map[model.ID
 	return k.store.BoardRoles(ctx, ps)
 }
 
+// VisibleBoardList is every board the caller in ctx may read, in the order the
+// store lists them. It is what the board list and the switcher draw: Boards
+// lists every board regardless of role, so a layer that shows the list to a
+// caller filters it through this first, or it shows a caller the name of a
+// board they hold nothing on.
+//
+// A caller with no principals sees nothing, which is an empty list and not an
+// error: an anonymous reader on a board with no grants is not refused the
+// front page, they are shown that there is nothing for them on it yet.
+func (k *Byge) VisibleBoardList(ctx context.Context) ([]model.Board, error) {
+	visible, err := k.VisibleBoards(ctx, identity.FromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if len(visible) == 0 {
+		return nil, nil
+	}
+	all, err := k.store.ListBoards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.Board, 0, len(visible))
+	for _, b := range all {
+		if _, ok := visible[b.ID]; ok {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
 // require refuses unless the caller in ctx holds at least need on this board.
 //
 // The caller comes out of the context rather than being passed in, because

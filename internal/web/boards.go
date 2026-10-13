@@ -18,7 +18,7 @@ import (
 // index is the front door. With exactly one board it redirects into it, because
 // a list of one is a page nobody wants; with any other number it is the list.
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
-	boards, err := s.svc.Boards(r.Context())
+	boards, err := s.svc.VisibleBoardList(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -30,9 +30,10 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	s.render(w, s.pages["boards"], "layout", http.StatusOK, boardsPage{Title: "Byge", User: identity.FromContext(r.Context()), Boards: boards})
 }
 
-// boardList draws every board and the form that makes another.
+// boardList draws every board the caller may read and the form that makes
+// another.
 func (s *Server) boardList(w http.ResponseWriter, r *http.Request) {
-	boards, err := s.svc.Boards(r.Context())
+	boards, err := s.svc.VisibleBoardList(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -43,9 +44,11 @@ func (s *Server) boardList(w http.ResponseWriter, r *http.Request) {
 
 // navBoards is the list behind the board name in the app bar. A read that fails
 // logs and returns nothing: a board that cannot name its neighbours is still a
-// board worth drawing, and the switcher simply does not open.
+// board worth drawing, and the switcher simply does not open. It carries only
+// the boards the caller may read, so the switcher never names one they hold
+// nothing on.
 func (s *Server) navBoards(ctx context.Context) []model.Board {
-	boards, err := s.svc.Boards(ctx)
+	boards, err := s.svc.VisibleBoardList(ctx)
 	if err != nil {
 		s.log.Error("board switcher", "err", err)
 		return nil
@@ -61,7 +64,7 @@ func (s *Server) createBoard(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var ve *service.ValidationError
 		if errors.As(err, &ve) || errors.Is(err, store.ErrConflict) {
-			boards, lerr := s.svc.Boards(r.Context())
+			boards, lerr := s.svc.VisibleBoardList(r.Context())
 			if lerr != nil {
 				s.fail(w, r, lerr)
 				return
@@ -99,7 +102,7 @@ func (s *Server) deleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(r.FormValue("confirm")), b.Name) {
-		boards, lerr := s.svc.Boards(r.Context())
+		boards, lerr := s.svc.VisibleBoardList(r.Context())
 		if lerr != nil {
 			s.fail(w, r, lerr)
 			return

@@ -287,6 +287,24 @@ func TestBoardLifecycle(t *testing.T) {
 	e.do("DELETE", "/api/v1/boards/work", "").want(t, 404)
 }
 
+// TestListBoardsFiltersByGrant is the list endpoint's half of the filter: the
+// caller who created a board sees it, and a different caller who holds nothing
+// on it gets an empty list rather than its name. The list filters, it does not
+// refuse, so the stranger still gets a 200 and an empty array.
+func TestListBoardsFiltersByGrant(t *testing.T) {
+	e := newEnv(t)
+	e.do("POST", "/api/v1/boards", `{"name":"Work"}`).want(t, 201)
+
+	if list := e.do("GET", "/api/v1/boards", "").want(t, 200).list; len(list) != 1 {
+		t.Errorf("the owner's list has %d boards, want 1", len(list))
+	}
+
+	e.user = "stranger@example.com"
+	if list := e.do("GET", "/api/v1/boards", "").want(t, 200).list; len(list) != 0 {
+		t.Errorf("a caller who holds nothing lists %d boards, want 0", len(list))
+	}
+}
+
 func TestABadRequestNamesTheField(t *testing.T) {
 	e := newEnv(t)
 

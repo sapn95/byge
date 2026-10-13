@@ -173,6 +173,39 @@ func TestIndex(t *testing.T) {
 	}
 }
 
+// TestBoardListFiltersByGrant is the filter the whole stage exists for, at the
+// list: the owner who made two boards sees both of them, and a caller who holds
+// nothing sees neither name. The list filters, it does not refuse, so the
+// stranger still gets the page, it is simply empty. GET / with no visible board
+// shows the empty list rather than redirecting into a board, and GET /boards
+// names the owner's boards to the owner and none to the stranger.
+func TestBoardListFiltersByGrant(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	// Two boards, owned by the default caller.
+	if _, err := e.svc.CreateBoard(ownerCtx(), "Alpha", "alpha", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.CreateBoard(ownerCtx(), "Beta", "beta", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// The owner sees both on the list page.
+	want(t, e.do(http.MethodGet, "/boards", nil), http.StatusOK, "/b/alpha", "/b/beta")
+
+	// A caller who holds nothing sees the page but neither board, and GET /
+	// shows them the empty list instead of a board they cannot read.
+	e.user = "stranger@example.com"
+	rr := e.do(http.MethodGet, "/boards", nil)
+	want(t, rr, http.StatusOK, "No boards yet")
+	if body := rr.Body.String(); strings.Contains(body, "/b/alpha") || strings.Contains(body, "/b/beta") {
+		t.Fatalf("the stranger's list names a board they hold nothing on:\n%s", body)
+	}
+	rr = e.do(http.MethodGet, "/", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET / for a caller with no visible board = %d, want 200 and the empty list", rr.Code)
+	}
+}
+
 func TestBoardPage(t *testing.T) {
 	e := seeded(t)
 	rr := e.do(http.MethodGet, "/b/demo", nil)
@@ -387,7 +420,10 @@ func TestStaticAndHealth(t *testing.T) {
 	}
 }
 
-// broken fails or panics on ListBoards to exercise the 500 paths.
+// broken fails or panics on the reads the board-list paths make, to exercise
+// the 500 paths. GroupsOf as well as ListBoards: the filtered list now asks who
+// the caller is before it lists, so a store that cannot answer the first read
+// must surface as a 500 just as one that cannot answer the second.
 type broken struct {
 	store.Store
 	panic bool
@@ -400,12 +436,23 @@ func (b broken) ListBoards(context.Context) ([]model.Board, error) {
 	return nil, errors.New("disk on fire")
 }
 
+func (b broken) GroupsOf(context.Context, string) ([]model.ID, error) {
+	if b.panic {
+		panic("kaboom")
+	}
+	return nil, errors.New("disk on fire")
+}
+
 func TestServerErrors(t *testing.T) {
 	e := newEnv(t, broken{Store: memory.New()}, nil)
 	want(t, e.do(http.MethodGet, "/", nil), http.StatusInternalServerError, "internal error")
 	if !strings.Contains(e.log.String(), "disk on fire") {
 		t.Fatalf("error not logged: %s", e.log.String())
 	}
+	// An empty name is a validation error, which the handler answers by
+	// re-rendering the board list with the reason on it. The default caller is
+	// identified, so that list read asks the broken store who they are and
+	// turns the re-render into a 500 rather than a half-drawn page.
 	want(t, e.do(http.MethodPost, "/boards", form("name", ""), "Content-Type", "application/x-www-form-urlencoded"), http.StatusInternalServerError)
 
 	p := newEnv(t, broken{Store: memory.New(), panic: true}, nil)
