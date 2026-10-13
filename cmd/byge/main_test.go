@@ -101,14 +101,19 @@ func TestServeMemory(t *testing.T) {
 		t.Fatalf("server did not start: %s", logs.String())
 	}
 	base := "http://" + addr.String()
+	// AUTH_MODE defaults to none, so this request is anonymous. Under stage-3
+	// enforcement an anonymous caller holds no grant on the bootstrap default
+	// board, so the front page lists the boards it may read, which is none,
+	// rather than redirecting into a board it would then be refused. The page
+	// is still served, not a 403: the list filters, it does not refuse.
 	resp, err := http.Get(base + "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Kanban Board") || !strings.Contains(resp.Request.URL.Path, "/b/board") {
-		t.Fatalf("GET /: %d %s", resp.StatusCode, resp.Request.URL)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "No boards yet") || resp.Request.URL.Path != "/" {
+		t.Fatalf("GET /: %d %s %s", resp.StatusCode, resp.Request.URL, body)
 	}
 	resp, err = http.Get(base + "/readyz")
 	if err != nil {
@@ -134,9 +139,23 @@ func TestServeMemory(t *testing.T) {
 
 // TestServeSQLite is the SQLite wiring end to end: a board created over HTTP
 // is still there after the process that created it has exited.
+//
+// It runs in proxy mode with an owner address on every request. Stage-3
+// enforcement refuses an anonymous caller, so creating a board needs somebody
+// to own it and reading one needs a grant; the proxy header is how an
+// identity reaches the service in a deployment that has one. The address that
+// creates the board becomes its owner, which is the grant the later read
+// relies on, including after the restart that is the point of this test.
 func TestServeSQLite(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kanban.db")
-	e := env(map[string]string{"STORAGE": "sqlite", "SQLITE_PATH": path, "LISTEN_ADDR": "127.0.0.1:0"})
+	e := env(map[string]string{
+		"STORAGE":     "sqlite",
+		"SQLITE_PATH": path,
+		"LISTEN_ADDR": "127.0.0.1:0",
+		"AUTH_MODE":   "proxy",
+		"AUTH_HEADER": "X-Forwarded-Email",
+	})
+	const owner = "owner@example.com"
 	addrs := make(chan net.Addr, 1)
 	old := notifyListening
 	notifyListening = func(a net.Addr) { addrs <- a }
@@ -167,11 +186,25 @@ func TestServeSQLite(t *testing.T) {
 		}
 	}
 
+	// do sends a request as the owner, so the proxy header names a caller the
+	// service will grant a role.
+	do := func(req *http.Request) *http.Response {
+		req.Header.Set("X-Forwarded-Email", owner)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
 	base, stop := start()
-	resp, err := http.PostForm(base+"/boards", url.Values{"name": {"Homelab"}})
+	req, err := http.NewRequest(http.MethodPost, base+"/boards",
+		strings.NewReader(url.Values{"name": {"Homelab"}}.Encode()))
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := do(req)
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || resp.Request.URL.Path != "/b/homelab" {
@@ -188,10 +221,11 @@ func TestServeSQLite(t *testing.T) {
 
 	base, stop = start()
 	defer stop()
-	resp, err = http.Get(base + "/b/homelab")
+	req, err = http.NewRequest(http.MethodGet, base+"/b/homelab", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	resp = do(req)
 	body, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Homelab") {

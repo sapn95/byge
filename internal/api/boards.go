@@ -14,9 +14,12 @@ import (
 // RemoveColumn is the one that checks for itself, because where the cards go is
 // a second id that has to be on the same board.
 
-// listBoards answers GET /boards with every board and its columns and labels.
+// listBoards answers GET /boards with every board the caller may read, each
+// with its columns and labels. Boards lists every board regardless of role, so
+// the filter is here: a script reading this endpoint sees the boards it holds a
+// grant on and not the names of the rest.
 func (s *Server) listBoards(w http.ResponseWriter, r *http.Request) {
-	boards, err := s.svc.Boards(r.Context())
+	boards, err := s.svc.VisibleBoardList(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
