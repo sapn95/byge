@@ -76,7 +76,7 @@ func TestACrossSiteWriteToTheAPIIsRefusedInJSON(t *testing.T) {
 	if body["error"] == "" {
 		t.Errorf("the refusal says nothing: %v", body)
 	}
-	if boards, _ := e.svc.Boards(t.Context()); len(boards) != 1 {
+	if boards, _ := e.svc.Boards(ownerCtx()); len(boards) != 1 {
 		t.Errorf("the refused write created something: %d boards", len(boards))
 	}
 

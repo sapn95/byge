@@ -41,7 +41,18 @@ func newEnv(t *testing.T) *env {
 	svc := service.New(memory.New(), service.WithClock(func() time.Time { return today }))
 	logBuf := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	return &env{t: t, h: New(svc, logger), svc: svc, doc: spec(t), log: logBuf}
+	// Every request carries an identity by default: enforcement refuses an
+	// anonymous caller, and the deployment this API serves sits behind a
+	// sign-in. A test that wants the no-identity path clears e.user.
+	return &env{t: t, h: New(svc, logger), svc: svc, doc: spec(t), log: logBuf, user: "him@example.com"}
+}
+
+// ownerCtx is the context seeding helpers create a board under, so that the
+// board's owner is the same address the requests carry (e.user). CreateBoard
+// self-grants that caller owner, which is what makes the authenticated
+// requests in these tests allowed.
+func ownerCtx() context.Context {
+	return identity.NewContext(context.Background(), identity.User{Email: "him@example.com"})
 }
 
 // seeded is a board with a label, a card and one comment on it, which is enough
@@ -49,7 +60,7 @@ func newEnv(t *testing.T) *env {
 func seeded(t *testing.T) *env {
 	t.Helper()
 	e := newEnv(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	b, err := e.svc.CreateBoard(ctx, "Demo Board", "demo", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -316,14 +327,14 @@ func TestColumns(t *testing.T) {
 
 	// An id that exists on another board is a 404 here, because the service
 	// method takes a bare id and would otherwise write to it.
-	other, err := e.svc.CreateBoard(context.Background(), "Other", "other", []string{"Only"})
+	other, err := e.svc.CreateBoard(ownerCtx(), "Other", "other", []string{"Only"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	foreign := string(other.Columns[0].ID)
 	e.do("PATCH", "/api/v1/boards/demo/columns/"+foreign, `{"name":"Mine now"}`).want(t, 404)
 	e.do("DELETE", "/api/v1/boards/demo/columns/"+foreign, "").want(t, 404)
-	if got, err := e.svc.Board(context.Background(), "other"); err != nil || got.Columns[0].Name != "Only" {
+	if got, err := e.svc.Board(ownerCtx(), "other"); err != nil || got.Columns[0].Name != "Only" {
 		t.Errorf("the other board's column changed: %v %v", got, err)
 	}
 
@@ -373,11 +384,11 @@ func TestLabels(t *testing.T) {
 	e.do("PATCH", "/api/v1/boards/demo/labels/"+second.str(t, "id"), `{"name":"later"}`).want(t, 409)
 	e.do("DELETE", "/api/v1/boards/demo/labels/"+second.str(t, "id"), "").want(t, 204)
 
-	other, err := e.svc.CreateBoard(context.Background(), "Other", "other", nil)
+	other, err := e.svc.CreateBoard(ownerCtx(), "Other", "other", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := e.svc.CreateLabel(context.Background(), other.ID, "theirs", "")
+	foreign, err := e.svc.CreateLabel(ownerCtx(), other.ID, "theirs", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +476,7 @@ func TestUpdateCardMovesItFirst(t *testing.T) {
 
 func TestAWIPLimitRefusesTheMoveAndKeepsTheCard(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	full, err := e.svc.AddColumn(ctx, e.board.ID, "Full", 1, false)
 	if err != nil {
 		t.Fatal(err)
@@ -494,7 +505,7 @@ func TestAWIPLimitRefusesTheMoveAndKeepsTheCard(t *testing.T) {
 
 func TestReorderCardsMovesAcrossColumns(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	second, err := e.svc.CreateCard(ctx, e.board.ID, e.board.Columns[0].ID,
 		service.CardInput{Title: "Second card"})
 	if err != nil {
@@ -527,11 +538,12 @@ func TestAssignee(t *testing.T) {
 		t.Errorf("assignee is %q after being cleared", got)
 	}
 
-	// Nobody signed in, so @me names nobody and that is the caller's fault
-	// rather than a 500.
+	// Nobody signed in. "@me" names nobody, and the write itself is refused:
+	// enforcement gives a caller with no identity no role, so a literal
+	// assignee is forbidden too, not just the one that needs an address.
 	e.user = ""
 	e.do("PUT", "/api/v1/cards/"+id+"/assignee", `{"assignee":"@me"}`).want(t, 403)
-	e.do("PUT", "/api/v1/cards/"+id+"/assignee", `{"assignee":"her@example.com"}`).want(t, 200)
+	e.do("PUT", "/api/v1/cards/"+id+"/assignee", `{"assignee":"her@example.com"}`).want(t, 403)
 }
 
 func TestToggleLabel(t *testing.T) {
@@ -549,11 +561,11 @@ func TestToggleLabel(t *testing.T) {
 
 	// A label from another board is a 404 and not a card carrying a label its
 	// board has never heard of.
-	other, err := e.svc.CreateBoard(context.Background(), "Other", "other", nil)
+	other, err := e.svc.CreateBoard(ownerCtx(), "Other", "other", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := e.svc.CreateLabel(context.Background(), other.ID, "theirs", "")
+	foreign, err := e.svc.CreateLabel(ownerCtx(), other.ID, "theirs", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,7 +599,7 @@ func TestArchiveAndRestore(t *testing.T) {
 
 func TestSearchIsTheSameQueryThePageRuns(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	if _, err := e.svc.CreateCard(ctx, e.board.ID, e.board.Columns[0].ID,
 		service.CardInput{Title: "Something else", Assignee: e.user}); err != nil {
 		t.Fatal(err)
@@ -611,7 +623,7 @@ func TestSearchIsTheSameQueryThePageRuns(t *testing.T) {
 
 func TestBulk(t *testing.T) {
 	e := seeded(t)
-	ctx := context.Background()
+	ctx := ownerCtx()
 	second, err := e.svc.CreateCard(ctx, e.board.ID, e.board.Columns[0].ID,
 		service.CardInput{Title: "Second card"})
 	if err != nil {
@@ -692,18 +704,20 @@ func TestComments(t *testing.T) {
 	e.do("DELETE", "/api/v1/comments/"+comment, "").want(t, 404)
 }
 
-// TestNoIdentityIsOneUser is the deployment with no authentication at all,
-// where the author is the empty address and so is the caller.
-func TestNoIdentityIsOneUser(t *testing.T) {
+// TestNoIdentityIsRefused is the enforcement contract for a request that
+// carries no identity at all. Stage 3 makes the service refuse a caller who
+// holds no role, and a caller with no address holds nothing, so the headerless
+// request is forbidden rather than served as "one user with every write". The
+// deployment with no authentication (ämtli's pod-to-pod jobs on the Pi) keeps
+// its write path by leaving enforcement off at the edge, not by a bypass in
+// the service; see the stage-3 handoff on why an enforcing release must not
+// reach that board before stage 5.
+func TestNoIdentityIsRefused(t *testing.T) {
 	e := seeded(t)
 	e.user = ""
 	id := string(e.card.ID)
 
-	created := e.do("POST", "/api/v1/cards/"+id+"/comments", `{"body":"Anybody"}`).want(t, 201)
-	if got := created.str(t, "author"); got != "" {
-		t.Errorf("author is %q where there is no identity", got)
-	}
-	e.do("DELETE", "/api/v1/comments/"+created.str(t, "id"), "").want(t, 204)
+	e.do("POST", "/api/v1/cards/"+id+"/comments", `{"body":"Anybody"}`).want(t, 403)
 }
 
 // TestNewWithoutALoggerDoesNotPanic covers the nil the mount in cmd/byge

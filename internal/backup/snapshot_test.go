@@ -11,12 +11,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
 	// seed() sets a board's SLA, and the service checks the zone name with
 	// time.LoadLocation before it writes one. A host with no
 	// /usr/share/zoneinfo would fail the seed rather than the assertion, so
 	// the test binary carries the zone database the same way cmd/byge does.
 	_ "time/tzdata"
 
+	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/service"
 	"byge/internal/store"
@@ -65,7 +67,13 @@ func must(t *testing.T, what string, err error) {
 // against two backends give the same file.
 func seed(t *testing.T, s store.Store) {
 	t.Helper()
-	ctx := context.Background()
+	// The service enforces board roles now, so the fixture is built by an
+	// identified owner. CreateBoard self-grants this caller owner, which is
+	// what lets the rest of the seed (columns, labels, cards, comments) run.
+	// Production backup writes to the store directly and never reaches this
+	// gate; the fixture goes through the service only to match the shape the
+	// running application produces.
+	ctx := identity.NewContext(context.Background(), identity.User{Email: "owner@example.com"})
 	tick := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
 	n := 0
 	svc := service.New(s,

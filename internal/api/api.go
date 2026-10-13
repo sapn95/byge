@@ -265,6 +265,8 @@ func statusFor(err error) (status int, message, field string) {
 		return http.StatusConflict, service.ErrWIPLimit.Error(), ""
 	case errors.Is(err, service.ErrNotAuthor):
 		return http.StatusForbidden, service.ErrNotAuthor.Error(), ""
+	case errors.Is(err, service.ErrForbidden):
+		return http.StatusForbidden, service.ErrForbidden.Error(), ""
 	case errors.Is(err, store.ErrInvalid):
 		return http.StatusBadRequest, "invalid request", ""
 	}
