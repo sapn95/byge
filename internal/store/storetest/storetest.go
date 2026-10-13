@@ -48,6 +48,7 @@ func Run(t *testing.T, newStore New) {
 		"Grants":        testGrants,
 		"BoardRoles":    testBoardRoles,
 		"GroupsOf":      testGroupsOf,
+		"BoardOf":       testBoardOf,
 	}
 	for name, fn := range tests {
 		t.Run(name, func(t *testing.T) {

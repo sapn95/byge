@@ -1101,5 +1101,20 @@ func (s *Store) DeleteLabel(ctx context.Context, id model.ID) error {
 	return affected(s.db.ExecContext(ctx, `DELETE FROM labels WHERE id = ?`, id))
 }
 
+// BoardOfColumn returns the board a column belongs to. One indexed row read;
+// mapErr turns sql.ErrNoRows into store.ErrNotFound for an unknown id.
+func (s *Store) BoardOfColumn(ctx context.Context, id model.ID) (model.ID, error) {
+	var b model.ID
+	err := s.db.QueryRowContext(ctx, `SELECT board_id FROM columns WHERE id = ?`, id).Scan(&b)
+	return b, mapErr(err)
+}
+
+// BoardOfLabel returns the board a label belongs to, the same way.
+func (s *Store) BoardOfLabel(ctx context.Context, id model.ID) (model.ID, error) {
+	var b model.ID
+	err := s.db.QueryRowContext(ctx, `SELECT board_id FROM labels WHERE id = ?`, id).Scan(&b)
+	return b, mapErr(err)
+}
+
 // String describes the backend for logs.
 func (s *Store) String() string { return fmt.Sprintf("sqlite(%s)", s.path) }

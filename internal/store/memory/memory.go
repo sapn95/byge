@@ -845,3 +845,25 @@ func (s *Store) DeleteLabel(_ context.Context, id model.ID) error {
 	}
 	return nil
 }
+
+// BoardOfColumn returns the board a column is on, or ErrNotFound. It wraps the
+// private boardOfColumn, which takes no lock, under the read lock.
+func (s *Store) BoardOfColumn(_ context.Context, id model.ID) (model.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if b, _ := s.boardOfColumn(id); b != nil {
+		return b.ID, nil
+	}
+	return "", store.ErrNotFound
+}
+
+// BoardOfLabel returns the board a label is on, or ErrNotFound. Same shape as
+// BoardOfColumn, over the private boardOfLabel.
+func (s *Store) BoardOfLabel(_ context.Context, id model.ID) (model.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if b, _ := s.boardOfLabel(id); b != nil {
+		return b.ID, nil
+	}
+	return "", store.ErrNotFound
+}

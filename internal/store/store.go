@@ -172,6 +172,13 @@ type Store interface {
 	// DeleteLabel removes the label from every card and deletes it.
 	DeleteLabel(ctx context.Context, id model.ID) error
 
+	// BoardOfColumn returns the board a column belongs to. ErrNotFound when
+	// there is no such column.
+	BoardOfColumn(ctx context.Context, columnID model.ID) (model.ID, error)
+	// BoardOfLabel returns the board a label belongs to. ErrNotFound when
+	// there is no such label.
+	BoardOfLabel(ctx context.Context, labelID model.ID) (model.ID, error)
+
 	// ListGroups returns every group with its members, by name.
 	ListGroups(ctx context.Context) ([]model.Group, error)
 	// GetGroup returns one group with its members. ErrNotFound when there is
