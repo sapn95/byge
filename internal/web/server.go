@@ -136,6 +136,20 @@ func New(svc *service.Byge, ready func(context.Context) error, log *slog.Logger,
 	mux.HandleFunc("POST /b/{board}/delete", s.deleteBoard)
 	mux.HandleFunc("POST /b/{board}/layout", s.setLayout)
 	mux.HandleFunc("POST /b/{board}/sla", s.setSLA)
+	// Who may read, write and own the board. Owner only, enforced in the
+	// service: the page and both writes go through a grant method whose first
+	// act is require(RoleOwner).
+	mux.HandleFunc("GET /b/{board}/access", s.access)
+	mux.HandleFunc("POST /b/{board}/access", s.setGrant)
+	mux.HandleFunc("POST /b/{board}/access/delete", s.deleteGrant)
+	// The groups kept in this database, which a grant on any board can name.
+	// Global, not a board's property, so they sit at the root like /boards.
+	// Any signed-in person may manage them; the service refuses an anonymous
+	// caller and a service token.
+	mux.HandleFunc("GET /groups", s.groups)
+	mux.HandleFunc("POST /groups", s.createGroup)
+	mux.HandleFunc("POST /groups/{id}", s.updateGroup)
+	mux.HandleFunc("POST /groups/{id}/delete", s.deleteGroup)
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", staticHandler(http.FileServerFS(assets.FS()))))
 	// The JSON API, on this mux and so inside the same middleware: one body cap,
 	// one cross-site check, one log line per request, and identity read once for
@@ -231,7 +245,7 @@ func (s *Server) parseTemplates() {
 		"templates/column.html"))
 	s.parts = base
 	s.pages = map[string]*template.Template{}
-	for _, name := range []string{"board", "boards", "archive", "settings", "offline", "about"} {
+	for _, name := range []string{"board", "boards", "archive", "settings", "access", "groups", "offline", "about"} {
 		s.pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFiles, "templates/"+name+".html"))
 	}
 }

@@ -1,0 +1,95 @@
+{{define "content"}}
+<!-- Capped and centred like settings: these are forms, not the board, so they
+     do not want the whole window. -->
+<div class="mx-auto max-w-4xl">
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <a href="/b/{{.BoardSlug}}/settings"
+     class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-sm">
+    <i class="bi bi-arrow-left"></i>Back to settings
+  </a>
+  <span class="text-sm text-slate-500 dark:text-slate-400">
+    {{len .Grants}} grant{{if ne (len .Grants) 1}}s{{end}}
+  </span>
+</div>
+
+{{with .Error}}
+<div class="mb-4 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3 text-sm text-red-800 dark:text-red-200" role="alert">
+  {{.}}
+</div>
+{{end}}
+
+{{$slug := .BoardSlug}}
+
+<h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Who may use this board</h2>
+<div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800 mb-3">
+  {{range .Grants}}
+  <div class="p-4 flex flex-col gap-3">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <span class="shrink-0 px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{.Kind}}</span>
+      <span class="w-full sm:w-auto sm:flex-1 sm:min-w-40 text-sm text-slate-900 dark:text-white break-all">{{.Grant.Principal.ID}}</span>
+      <span class="shrink-0 text-sm text-slate-600 dark:text-slate-300">{{.Grant.Role}}</span>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+      <!-- The bin asks before it does anything, in the page rather than in a
+           browser dialog, the same two-step details/summary settings uses. -->
+      <details class="unfold unfold-row">
+        <summary title="Remove this grant"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer
+                 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-500/15">
+          <i class="bi bi-trash text-sm"></i>
+          <span class="sr-only">Remove this grant</span>
+        </summary>
+        <form method="post" action="/b/{{$slug}}/access/delete"
+              class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 p-3">
+          <input type="hidden" name="kind" value="{{.Grant.Principal.Kind}}">
+          <input type="hidden" name="id" value="{{.Grant.Principal.ID}}">
+          <span class="text-sm text-rose-800 dark:text-rose-200">
+            Remove {{.Kind}} {{.Grant.Principal.ID}}?
+          </span>
+          <button type="submit"
+            class="shrink-0 px-3 py-2 text-sm font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white">
+            Remove grant
+          </button>
+        </form>
+      </details>
+    </div>
+  </div>
+  {{end}}
+
+  <form method="post" action="/b/{{$slug}}/access" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 shrink-0">
+      <span class="sr-only">Kind</span>
+      <select name="kind" aria-label="Principal kind"
+        class="px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+        {{range .Kinds}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <input type="text" name="id" required maxlength="320" placeholder="address or group name" aria-label="Principal"
+      list="local-groups"
+      class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+    <datalist id="local-groups">
+      {{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </datalist>
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 shrink-0">
+      <span class="sr-only">Role</span>
+      <select name="role" aria-label="Role"
+        class="px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+        {{range .Roles}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+      <i class="bi bi-plus mr-1"></i>Add
+    </button>
+  </form>
+</div>
+
+<p class="mt-4 text-sm text-slate-400 dark:text-slate-500">
+  A grant allows a principal to use the board. A user is one address; a local
+  group is a group kept here, named by its id; an idp group is a group name your
+  identity provider sends. Read opens the board, write adds and moves cards,
+  owner also changes settings and hands out roles. A board always keeps at least
+  one owner.
+</p>
+</div>
+{{end}}

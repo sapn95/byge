@@ -343,6 +343,90 @@ func slaSettings(sla model.SLA) slaView {
 // the midnight it is.
 func clockValue(m int) string { return model.ClockString(m) }
 
+// --- access and groups --------------------------------------------------------
+
+// grantView is one row of the board-access page: the grant plus a human label
+// for its principal kind, so the template prints "local group" rather than the
+// bare "group" the model stores.
+type grantView struct {
+	Grant model.Grant
+	Kind  string
+}
+
+// roleOption and kindOption feed the add form's two selects. Value is what the
+// form posts; Label is what the person reads.
+type roleOption struct {
+	Value model.Role
+	Label string
+}
+
+type kindOption struct {
+	Value model.PrincipalKind
+	Label string
+}
+
+// grantRoles and grantKinds are the fixed option lists the add form offers. The
+// values are the model's own, so a crafted body is still the service's to
+// refuse; these only decide what the select draws.
+var (
+	grantRoles = []roleOption{
+		{model.RoleRead, "read"},
+		{model.RoleWrite, "write"},
+		{model.RoleOwner, "owner"},
+	}
+	grantKinds = []kindOption{
+		{model.PrincipalUser, "user"},
+		{model.PrincipalGroup, "local group"},
+		{model.PrincipalIDP, "idp group"},
+	}
+)
+
+// kindLabel is the human label for a principal kind, for the grant rows.
+func kindLabel(k model.PrincipalKind) string {
+	for _, o := range grantKinds {
+		if o.Value == k {
+			return o.Label
+		}
+	}
+	return string(k)
+}
+
+type accessPage struct {
+	Title     string
+	User      identity.User
+	BoardSlug string
+	// Boards is every board the caller may read, for the switcher the app bar
+	// puts behind this one's name.
+	Boards []model.Board
+	Grants []grantView
+	Roles  []roleOption
+	Kinds  []kindOption
+	// Groups is the local groups, for the add form's datalist of group ids.
+	Groups []model.Group
+	Error  string
+}
+
+// groupView wraps a group with its member count and a members string joined one
+// address per line, for the edit textarea.
+type groupView struct {
+	Group   model.Group
+	Members int
+	Lines   string
+}
+
+type groupsPage struct {
+	Title string
+	User  identity.User
+	// BoardSlug is empty: the groups page is global, not a board's, so the app
+	// bar draws the plain title rather than the board switcher. The layout
+	// reads this field on every page, so it has to be present even unset.
+	BoardSlug string
+	// Boards is every board the caller may read, for the app-bar switcher.
+	Boards []model.Board
+	Groups []groupView
+	Error  string
+}
+
 type settingsPage struct {
 	Title     string
 	User      identity.User

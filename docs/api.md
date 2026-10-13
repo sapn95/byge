@@ -1,11 +1,11 @@
 # Endpoints
 
-Every route the server answers, all 45 of them, registered in one block in
+Every route the server answers, all 52 of them, registered in one block in
 `internal/web/server.go`. A test compares this file against that block and
 fails when either side has something the other does not, so a route cannot be
 added or removed without the table changing with it.
 
-The last of those 45 is the JSON API, which brings its own thirty-one routes under
+The last of those 52 is the JSON API, which brings its own thirty-one routes under
 `/api/v1/` and its own document; the [table below](#the-json-api) gives it one
 row. This file is about the page routes.
 
@@ -127,6 +127,33 @@ message and the appropriate status rather than redirecting.
 | `POST /b/{board}/columns/{id}` | `name`, `wip_limit`, `stops_clock` | `303` to settings |
 | `POST /b/{board}/columns/{id}/delete` | `move_to`: the column the cards go to, empty to delete them with it | `303` to settings |
 | `POST /b/{board}/columns/{id}/move` | `direction=up\|down` | `303` to settings. A move off either end changes nothing |
+
+## Board access
+
+Who may read, write and own this board. Owner only: the page and all three
+writes go through the service's owner check, so a reader or a stranger gets a
+`403` and an anonymous caller gets one too. A grant allows a principal, so this
+is an allow list and nothing else; there is no deny list.
+
+| Route | Sends | Answers |
+|-------|-------|---------|
+| `GET /b/{board}/access` | | The board's grants, each a principal and its role, with the form that adds one. `403` for anyone but an owner |
+| `POST /b/{board}/access` | `kind` (`user`\|`group`\|`idp`), `id`, `role` (`read`\|`write`\|`owner`) | `303` to the access page. `400` re-renders it with the reason, including a grant to a local group that does not exist, and a change that would leave the board with no owner |
+| `POST /b/{board}/access/delete` | `kind`, `id` | `303` to the access page. Removing the last owner is refused with `400` |
+
+## Local groups
+
+The groups kept in byge's own database, as opposed to the group names an
+identity provider sends. A grant on any board can name one. Any signed-in
+person may manage them; an anonymous request and a service token both get a
+`403`.
+
+| Route | Sends | Answers |
+|-------|-------|---------|
+| `GET /groups` | | Every local group with its members, and the form that makes another. `403` when nobody is signed in |
+| `POST /groups` | `name`, `members` (one address per line) | `303` to the groups page. `400` re-renders it with the reason; `409` on a duplicate name |
+| `POST /groups/{id}` | `name`, `members` | as above; `404` when the group is gone |
+| `POST /groups/{id}/delete` | | `303` to the groups page. The group and every grant made to it go |
 
 ## The JSON API
 
