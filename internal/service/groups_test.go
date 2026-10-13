@@ -3,18 +3,34 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
-// requireGroupAdmin is any signed-in person: an anonymous caller and a service
-// token are refused, a person is let through. Exercised through Groups and
-// CreateGroup, the two readable from a test without a store write.
-func TestGroupAdminIsAnySignedInPerson(t *testing.T) {
-	k := newSvc(t)
+// newSvcOwner is newSvc with ada@example.com as the bootstrap owner, so the
+// group tests below — which all act as ada@example.com — reach the one caller
+// requireGroupAdmin now admits.
+func newSvcOwner(t *testing.T) *Byge {
+	t.Helper()
+	n := 0
+	return New(memory.New(),
+		WithClock(func() time.Time { return fixed }),
+		WithIDs(func() model.ID { n++; return model.ID(fmt.Sprintf("id%03d", n)) }),
+		WithBootstrapOwner("ada@example.com"))
+}
+
+// requireGroupAdmin is the bootstrap owner alone: an anonymous caller, a service
+// token and an identified-but-not-bootstrap caller are all refused, and the
+// bootstrap owner is let through. Exercised through Groups and CreateGroup, the
+// two readable from a test without a store write.
+func TestGroupAdminIsTheBootstrapOwner(t *testing.T) {
+	k := newSvcOwner(t)
 
 	for _, tc := range []struct {
 		name string
@@ -22,6 +38,7 @@ func TestGroupAdminIsAnySignedInPerson(t *testing.T) {
 	}{
 		{"anonymous", context.Background()},
 		{"service token", identity.NewContext(context.Background(), identity.User{Service: "ci"})},
+		{"not the bootstrap owner", identity.NewContext(context.Background(), identity.User{Email: "mallory@example.com"})},
 	} {
 		if _, err := k.Groups(tc.ctx); err != ErrForbidden {
 			t.Errorf("%s Groups = %v, want ErrForbidden", tc.name, err)
@@ -31,17 +48,17 @@ func TestGroupAdminIsAnySignedInPerson(t *testing.T) {
 		}
 	}
 
-	// A person is let through.
-	person := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
-	if _, err := k.Groups(person); err != nil {
-		t.Errorf("person Groups = %v, want nil", err)
+	// The bootstrap owner is let through.
+	owner := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
+	if _, err := k.Groups(owner); err != nil {
+		t.Errorf("bootstrap owner Groups = %v, want nil", err)
 	}
 }
 
 // CreateGroup lowercases, trims and deduplicates members, so a group holds each
 // address once in the form a grant match expects.
 func TestCreateGroupNormalisesMembers(t *testing.T) {
-	k := newSvc(t)
+	k := newSvcOwner(t)
 	ctx := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
 
 	g, err := k.CreateGroup(ctx, "  Platform  ", []string{"Ada@Example.com", "  bob@example.com  ", "ada@example.com", ""})
@@ -71,7 +88,7 @@ func TestCreateGroupNormalisesMembers(t *testing.T) {
 
 // An empty name is refused; a duplicate name is a store conflict.
 func TestCreateGroupNameRules(t *testing.T) {
-	k := newSvc(t)
+	k := newSvcOwner(t)
 	ctx := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
 
 	if _, err := k.CreateGroup(ctx, "   ", nil); !isValidation(err, "name") {
@@ -88,7 +105,7 @@ func TestCreateGroupNameRules(t *testing.T) {
 
 // Groups lists what was created, so the page has something to draw.
 func TestGroupsListsWhatWasCreated(t *testing.T) {
-	k := newSvc(t)
+	k := newSvcOwner(t)
 	ctx := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
 	if _, err := k.CreateGroup(ctx, "Platform", nil); err != nil {
 		t.Fatal(err)
@@ -105,7 +122,7 @@ func TestGroupsListsWhatWasCreated(t *testing.T) {
 // UpdateGroup and DeleteGroup are guarded the same way. An anonymous caller is
 // refused both.
 func TestUpdateAndDeleteGroupAreGuarded(t *testing.T) {
-	k := newSvc(t)
+	k := newSvcOwner(t)
 	ctx := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
 	g, err := k.CreateGroup(ctx, "Platform", nil)
 	if err != nil {
@@ -129,7 +146,7 @@ func TestUpdateAndDeleteGroupAreGuarded(t *testing.T) {
 // UpdateGroup on an id that does not exist is the store's ErrNotFound, which a
 // handler turns into a 404.
 func TestUpdateUnknownGroupIsNotFound(t *testing.T) {
-	k := newSvc(t)
+	k := newSvcOwner(t)
 	ctx := identity.NewContext(context.Background(), identity.User{Email: "ada@example.com"})
 	err := k.UpdateGroup(ctx, model.ID("nope"), "Renamed", nil)
 	if !errors.Is(err, store.ErrNotFound) {

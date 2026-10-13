@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/store"
+	"byge/internal/store/memory"
 )
 
 // The board keeps an owner: the last owner grant cannot be demoted or removed,
@@ -90,9 +93,16 @@ func TestSetBoardGrantUnknownGroupIsValidationError(t *testing.T) {
 	}
 }
 
-// A grant to a local group that does exist is allowed and written.
+// A grant to a local group that does exist is allowed and written. The group
+// is created through CreateGroup, which stage 5 restricts to the bootstrap
+// owner, so this runs on a service whose bootstrap owner is the owner@example.com
+// caller ownerCtx carries.
 func TestSetBoardGrantKnownGroup(t *testing.T) {
-	k := newSvc(t)
+	n := 0
+	k := New(memory.New(),
+		WithClock(func() time.Time { return fixed }),
+		WithIDs(func() model.ID { n++; return model.ID(fmt.Sprintf("id%03d", n)) }),
+		WithBootstrapOwner("owner@example.com"))
 	b := mustMakeBoard(t, k, "Board")
 	g, err := k.CreateGroup(ownerCtx(), "Platform", []string{"ada@example.com"})
 	if err != nil {

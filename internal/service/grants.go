@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 
+	"byge/internal/identity"
 	"byge/internal/model"
 	"byge/internal/store"
 )
@@ -76,6 +77,45 @@ func (k *Byge) SetBoardGrant(ctx context.Context, boardID model.ID, p model.Prin
 		return invalid("role", "a board must keep an owner")
 	}
 	return k.store.SetGrant(ctx, &model.Grant{BoardID: boardID, Principal: p, Role: role})
+}
+
+// ClaimBoard makes the bootstrap owner the owner of a board that has no owner.
+// It is how an ownerless board — the default board EnsureDefaultBoard writes
+// with no grant, or any board left ownerless — gets its first owner, and it is
+// the only way to do so.
+//
+// Only the configured AUTH_BOOTSTRAP_OWNER may call it, enforced here and not in
+// a handler, consistent with every other grant method. It refuses a board that
+// already has an owner: claiming is for the ownerless, and a board with an owner
+// is changed through SetBoardGrant by that owner, not taken over from config.
+//
+// The check-then-write (the ListGrants scan, then SetGrant) is not atomic:
+// nothing holds a lock between the two. It is safe rather than a second
+// uncontrolled owner, because every writer that reaches here sets the identical
+// user:<bootstrap> → owner grant and SetGrant replaces rather than appends on
+// the principal key, so the worst case is a redundant write of the same grant;
+// SetBoardGrant's last-owner guard then governs the board from the first write.
+func (k *Byge) ClaimBoard(ctx context.Context, boardID model.ID) error {
+	if !k.isBootstrapOwner(ctx) {
+		return ErrForbidden
+	}
+	grants, err := k.store.ListGrants(ctx, boardID)
+	if err != nil {
+		return err
+	}
+	for _, g := range grants {
+		if g.Role == model.RoleOwner {
+			// Already owned. The bootstrap owner is not an owner of it unless a
+			// grant says so, so this is refused rather than silently adding a
+			// second owner from config.
+			return ErrForbidden
+		}
+	}
+	return k.store.SetGrant(ctx, &model.Grant{
+		BoardID:   boardID,
+		Principal: model.UserPrincipal(identity.FromContext(ctx).Email),
+		Role:      model.RoleOwner,
+	})
 }
 
 // RemoveBoardGrant takes a principal off a board. Owner only, and it will not

@@ -70,9 +70,10 @@ func invalid(field, msg string) error { return &ValidationError{Field: field, Me
 
 // Byge is the application service.
 type Byge struct {
-	store store.Store
-	now   func() time.Time
-	newID func() model.ID
+	store          store.Store
+	now            func() time.Time
+	newID          func() model.ID
+	bootstrapOwner string
 }
 
 // Option configures New.
@@ -83,6 +84,9 @@ func WithClock(now func() time.Time) Option { return func(k *Byge) { k.now = now
 
 // WithIDs replaces the ID generator; tests use it.
 func WithIDs(newID func() model.ID) Option { return func(k *Byge) { k.newID = newID } }
+
+// WithBootstrapOwner sets the AUTH_BOOTSTRAP_OWNER principal; expects the config's lowercased value.
+func WithBootstrapOwner(addr string) Option { return func(k *Byge) { k.bootstrapOwner = addr } }
 
 // New wires the service to a store.
 func New(s store.Store, opts ...Option) *Byge {

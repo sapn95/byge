@@ -1,7 +1,8 @@
 // The local groups page: the groups kept in byge's own database, which a grant
-// on any board can name. Any signed-in person may manage them; an anonymous
-// caller and a service token are refused inside the service by requireGroupAdmin
-// (ErrForbidden → 403 through s.fail), so no handler here checks identity.
+// on any board can name. Only the bootstrap owner may manage them; everyone
+// else — anonymous, service token, or an ordinary signed-in caller — is refused
+// by requireGroupAdmin (ErrForbidden → 403 through s.fail), so no handler here
+// checks identity.
 
 package web
 

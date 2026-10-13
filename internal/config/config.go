@@ -50,11 +50,12 @@ type Config struct {
 
 	// Who is making the request. See docs/adr/0005 for why proxy and access are
 	// not interchangeable, and why none is a defensible default.
-	AuthMode         string `env:"AUTH_MODE"`          // none takes every request as anonymous
-	AuthHeader       string `env:"AUTH_HEADER"`        // the header read in proxy mode
-	AccessTeamDomain string `env:"ACCESS_TEAM_DOMAIN"` // e.g. team.cloudflareaccess.com
-	AccessAudience   string `env:"ACCESS_AUD"`         // the Access application's AUD tag
-	AuthRequired     bool   `env:"AUTH_REQUIRED"`      // true: a request with no identity is refused rather than served
+	AuthMode           string `env:"AUTH_MODE"`            // none takes every request as anonymous
+	AuthHeader         string `env:"AUTH_HEADER"`          // the header read in proxy mode
+	AccessTeamDomain   string `env:"ACCESS_TEAM_DOMAIN"`   // e.g. team.cloudflareaccess.com
+	AccessAudience     string `env:"ACCESS_AUD"`           // the Access application's AUD tag
+	AuthRequired       bool   `env:"AUTH_REQUIRED"`        // true: a request with no identity is refused rather than served
+	AuthBootstrapOwner string `env:"AUTH_BOOTSTRAP_OWNER"` // an address: the only caller who may claim a board that has no owner, and who sees an ownerless board meanwhile; lowercased on read
 	// Where the caller's groups come from, so that a board can be granted a
 	// role on a group the identity provider keeps rather than one kept here.
 	// Both are empty by default: a deployment that sets neither has only the
@@ -158,14 +159,15 @@ func FromEnv(get Lookup) (Config, error) {
 		DBSSLMode:   env("DB_SSLMODE", "disable"),
 		SQLitePath:  env("SQLITE_PATH", defaultSQLitePath),
 
-		AuthMode:          strings.ToLower(env("AUTH_MODE", AuthNone)),
-		AuthHeader:        env("AUTH_HEADER", "X-Forwarded-Email"),
-		AccessTeamDomain:  strings.TrimSuffix(strings.TrimPrefix(env("ACCESS_TEAM_DOMAIN", ""), "https://"), "/"),
-		AccessAudience:    env("ACCESS_AUD", ""),
-		AuthGroupsHeader:  env("AUTH_GROUPS_HEADER", ""),
-		AccessGroupsClaim: env("ACCESS_GROUPS_CLAIM", ""),
-		LogLevel:          strings.ToLower(env("LOG_LEVEL", "info")),
-		LogFormat:         strings.ToLower(env("LOG_FORMAT", "text")),
+		AuthMode:           strings.ToLower(env("AUTH_MODE", AuthNone)),
+		AuthHeader:         env("AUTH_HEADER", "X-Forwarded-Email"),
+		AuthBootstrapOwner: strings.ToLower(env("AUTH_BOOTSTRAP_OWNER", "")),
+		AccessTeamDomain:   strings.TrimSuffix(strings.TrimPrefix(env("ACCESS_TEAM_DOMAIN", ""), "https://"), "/"),
+		AccessAudience:     env("ACCESS_AUD", ""),
+		AuthGroupsHeader:   env("AUTH_GROUPS_HEADER", ""),
+		AccessGroupsClaim:  env("ACCESS_GROUPS_CLAIM", ""),
+		LogLevel:           strings.ToLower(env("LOG_LEVEL", "info")),
+		LogFormat:          strings.ToLower(env("LOG_FORMAT", "text")),
 
 		BackupDir:          env("BACKUP_DIR", ""),
 		BackupS3Bucket:     env("BACKUP_S3_BUCKET", ""),

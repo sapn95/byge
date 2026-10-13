@@ -10,8 +10,10 @@ import (
 	"byge/internal/model"
 )
 
-// The local groups page and its three writes. Any signed-in person may manage
-// groups; an anonymous caller and a service token are refused. Every route is
+// The local groups page and its three writes. Only the bootstrap owner may
+// manage groups; an anonymous caller, a service token and any other signed-in
+// caller are refused. The default request caller is the bootstrap owner (see
+// newEnv), so the write sub-tests below pass as that caller. Every route is
 // requested.
 
 // groupsList reads the groups straight from the store, to assert what a write
@@ -41,12 +43,14 @@ func (e *env) doService(method, path string, body io.Reader) *httptest.ResponseR
 func TestGroupsPageAccess(t *testing.T) {
 	e := seeded(t)
 
-	// An identified caller sees the page.
+	// The bootstrap owner (the default caller) sees the page.
 	want(t, e.do(http.MethodGet, "/groups", nil), http.StatusOK, "Local groups")
 
-	// Another identified caller sees it too.
+	// Another identified caller, who is not the bootstrap owner, is refused.
 	e.user = "someone@example.com"
-	want(t, e.do(http.MethodGet, "/groups", nil), http.StatusOK, "Local groups")
+	if rr := e.do(http.MethodGet, "/groups", nil); rr.Code != http.StatusForbidden {
+		t.Errorf("non-bootstrap caller GET /groups = %d, want 403", rr.Code)
+	}
 
 	// A service token is refused.
 	if rr := e.doService(http.MethodGet, "/groups", nil); rr.Code != http.StatusForbidden {
