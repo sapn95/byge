@@ -171,3 +171,183 @@ func TestVisibleBoards(t *testing.T) {
 		t.Errorf("VisibleBoards(nobody) = %v, want an empty map", got)
 	}
 }
+
+// readerCtx, writerCtx and ownerBoard set up the one shape every method in the
+// matrix below needs: a board owned by owner@example.com (mustMakeBoard does
+// that) with one more caller granted a single role on it. The caller is a
+// person, in a context, because require reads identity out of the context.
+func grantedCtx(t *testing.T, k *Byge, board model.ID, email string, role model.Role) context.Context {
+	t.Helper()
+	grant(t, k, board, model.UserPrincipal(email), role)
+	return identity.NewContext(context.Background(), identity.User{Email: email})
+}
+
+// A reader opens the board and reads its cards and is refused everything that
+// writes or owns. require runs before any board or card lookup, so a refused
+// write names the forbidden role rather than a missing column.
+func TestRoleMatrixReader(t *testing.T) {
+	k := newSvc(t)
+	b := mustMakeBoard(t, k, "Board")
+	reader := grantedCtx(t, k, b.ID, "reader@example.com", model.RoleRead)
+
+	if _, err := k.Cards(reader, b.ID); err != nil {
+		t.Errorf("reader Cards = %v, want nil", err)
+	}
+	if _, err := k.CreateCard(reader, b.ID, b.Columns[0].ID, CardInput{Title: "x"}); err != ErrForbidden {
+		t.Errorf("reader CreateCard = %v, want ErrForbidden", err)
+	}
+	if _, err := k.AddColumn(reader, b.ID, "New", 0, false); err != ErrForbidden {
+		t.Errorf("reader AddColumn = %v, want ErrForbidden", err)
+	}
+	if _, err := k.RenameBoard(reader, b.ID, "Renamed", ""); err != ErrForbidden {
+		t.Errorf("reader RenameBoard = %v, want ErrForbidden", err)
+	}
+}
+
+// A writer adds and moves cards and is refused only the owner's settings
+// changes. The write path runs all the way to the store, so the card it
+// creates is proof the guard let it through rather than failed open.
+func TestRoleMatrixWriter(t *testing.T) {
+	k := newSvc(t)
+	b := mustMakeBoard(t, k, "Board")
+	writer := grantedCtx(t, k, b.ID, "writer@example.com", model.RoleWrite)
+
+	c, err := k.CreateCard(writer, b.ID, b.Columns[0].ID, CardInput{Title: "a card"})
+	if err != nil {
+		t.Fatalf("writer CreateCard = %v, want nil", err)
+	}
+	if c == nil || c.Title != "a card" {
+		t.Fatalf("writer CreateCard card = %+v", c)
+	}
+	if _, err := k.AddColumn(writer, b.ID, "New", 0, false); err != ErrForbidden {
+		t.Errorf("writer AddColumn = %v, want ErrForbidden", err)
+	}
+	if _, err := k.RenameBoard(writer, b.ID, "Renamed", ""); err != ErrForbidden {
+		t.Errorf("writer RenameBoard = %v, want ErrForbidden", err)
+	}
+}
+
+// An owner may do all three. owner@example.com owns the board through
+// CreateBoard's self-grant, so ownerCtx is already an owner here.
+func TestRoleMatrixOwner(t *testing.T) {
+	k := newSvc(t)
+	b := mustMakeBoard(t, k, "Board")
+	owner := ownerCtx()
+
+	if _, err := k.Cards(owner, b.ID); err != nil {
+		t.Errorf("owner Cards = %v, want nil", err)
+	}
+	if _, err := k.CreateCard(owner, b.ID, b.Columns[0].ID, CardInput{Title: "x"}); err != nil {
+		t.Errorf("owner CreateCard = %v, want nil", err)
+	}
+	if _, err := k.AddColumn(owner, b.ID, "New", 0, false); err != nil {
+		t.Errorf("owner AddColumn = %v, want nil", err)
+	}
+}
+
+// An unidentified caller and a service token are no principals, so they hold
+// nothing on any board: every guarded method refuses them, and only the open
+// methods answer. A service token that could read a board the moment grants
+// existed is the hole this change closes, so it is checked beside the
+// anonymous one.
+func TestNoPrincipalsRefusedButOpenMethodsAnswer(t *testing.T) {
+	k := newSvc(t)
+	b := mustMakeBoard(t, k, "Board")
+
+	for _, tc := range []struct {
+		name string
+		ctx  context.Context
+	}{
+		{"anonymous", context.Background()},
+		{"service token", identity.NewContext(context.Background(), identity.User{Service: "ci"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := k.Cards(tc.ctx, b.ID); err != ErrForbidden {
+				t.Errorf("Cards = %v, want ErrForbidden", err)
+			}
+			if _, err := k.CreateCard(tc.ctx, b.ID, b.Columns[0].ID, CardInput{Title: "x"}); err != ErrForbidden {
+				t.Errorf("CreateCard = %v, want ErrForbidden", err)
+			}
+			if _, err := k.AddColumn(tc.ctx, b.ID, "New", 0, false); err != ErrForbidden {
+				t.Errorf("AddColumn = %v, want ErrForbidden", err)
+			}
+			// Boards is open to everyone: it lists the board for a caller who
+			// may not read it, because the list filters per board elsewhere.
+			list, err := k.Boards(tc.ctx)
+			if err != nil || len(list) != 1 {
+				t.Errorf("Boards = %+v, %v, want one board and no error", list, err)
+			}
+		})
+	}
+}
+
+// Search is single-board: it refuses an unreadable board with ErrForbidden
+// rather than filtering it away, because the filter-not-refuse rule lives in
+// Boards and VisibleBoards, which this is not.
+func TestSearchRefusesAnUnreadableBoard(t *testing.T) {
+	k := newSvc(t)
+	b := mustMakeBoard(t, k, "Board")
+
+	stranger := identity.NewContext(context.Background(), identity.User{Email: "stranger@example.com"})
+	if _, err := k.Search(stranger, b.ID, Query{}); err != ErrForbidden {
+		t.Errorf("Search on a board the caller holds nothing on = %v, want ErrForbidden", err)
+	}
+	// The owner reads it, which is the proof the refusal is the grant and not
+	// the board.
+	if _, err := k.Search(ownerCtx(), b.ID, Query{}); err != nil {
+		t.Errorf("Search as owner = %v, want nil", err)
+	}
+}
+
+// CreateBoard is open to any person and to nobody else. An anonymous context
+// is refused and writes no board; an identified caller becomes the board's
+// owner, which is the grant that lets them do anything with it afterwards.
+func TestCreateBoardIdentityAndOwnerGrant(t *testing.T) {
+	k := newSvc(t)
+
+	if _, err := k.CreateBoard(context.Background(), "Anon", "", nil); err != ErrForbidden {
+		t.Errorf("CreateBoard anonymous = %v, want ErrForbidden", err)
+	}
+	list, err := k.Boards(context.Background())
+	if err != nil || len(list) != 0 {
+		t.Fatalf("Boards after refused create = %+v, %v, want none", list, err)
+	}
+
+	ada := identity.User{Email: "ada@example.com"}
+	ctx := identity.NewContext(context.Background(), ada)
+	b, err := k.CreateBoard(ctx, "Ada's", "", nil)
+	if err != nil {
+		t.Fatalf("CreateBoard identified = %v, want nil", err)
+	}
+	role, err := k.RoleOn(ctx, ada, b.ID)
+	if err != nil {
+		t.Fatalf("RoleOn: %v", err)
+	}
+	if role != model.RoleOwner {
+		t.Errorf("creator RoleOn = %q, want owner", role)
+	}
+}
+
+// EnsureDefaultBoard is the bootstrap, so it runs on a plain context with no
+// identity, creates the board without error, and grants nobody anything: a
+// default board has no human owner until stage 5's onboarding, so RoleOn of a
+// caller on it is "".
+func TestEnsureDefaultBoardBootstrapNoGrant(t *testing.T) {
+	k := newSvc(t)
+	ctx := context.Background()
+
+	boards, err := k.EnsureDefaultBoard(ctx)
+	if err != nil {
+		t.Fatalf("EnsureDefaultBoard = %v, want nil", err)
+	}
+	if len(boards) != 1 {
+		t.Fatalf("EnsureDefaultBoard returned %d boards, want 1", len(boards))
+	}
+	role, err := k.RoleOn(ctx, identity.User{Email: "anyone@example.com"}, boards[0].ID)
+	if err != nil {
+		t.Fatalf("RoleOn: %v", err)
+	}
+	if role != "" {
+		t.Errorf("RoleOn of a caller on the bootstrap board = %q, want none", role)
+	}
+}
