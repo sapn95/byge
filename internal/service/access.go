@@ -45,6 +45,44 @@ func (k *Byge) Principals(ctx context.Context, u identity.User) ([]model.Princip
 	return out, nil
 }
 
+// addrIsBootstrapOwner reports whether u is the configured AUTH_BOOTSTRAP_OWNER.
+// Empty config, an anonymous caller or a service token is never the bootstrap
+// owner: Person() gates the token out the same way Principals does, and an empty
+// k.bootstrapOwner matches nobody because the address is compared, not its
+// emptiness. This is the single security-critical predicate; isBootstrapOwner is
+// a thin ctx wrapper over it so ClaimBoard (ctx) and RoleOn (explicit u) decide
+// against the same principal with the same normalisation.
+func (k *Byge) addrIsBootstrapOwner(u identity.User) bool {
+	if k.bootstrapOwner == "" || !u.Person() {
+		return false
+	}
+	return model.UserPrincipal(u.Email).ID == k.bootstrapOwner
+}
+
+// isBootstrapOwner reports whether the caller in ctx is the bootstrap owner.
+func (k *Byge) isBootstrapOwner(ctx context.Context) bool {
+	return k.addrIsBootstrapOwner(identity.FromContext(ctx))
+}
+
+// boardHasOwner reports whether any grant on the board is RoleOwner. The error
+// is returned, never discarded: a store that will not answer must not be read
+// as "no owner", which would hand the bootstrap owner a board whose owner the
+// error was hiding. A board that does not exist returns the store's
+// ErrNotFound rather than (false, nil), so a missing board is an error, not an
+// ownerless board the bootstrap owner may claim.
+func (k *Byge) boardHasOwner(ctx context.Context, boardID model.ID) (bool, error) {
+	grants, err := k.store.ListGrants(ctx, boardID)
+	if err != nil {
+		return false, err
+	}
+	for _, g := range grants {
+		if g.Role == model.RoleOwner {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // RoleOn is what this caller may do with this board, "" for nothing at all.
 func (k *Byge) RoleOn(ctx context.Context, u identity.User, boardID model.ID) (model.Role, error) {
 	ps, err := k.Principals(ctx, u)
@@ -58,7 +96,60 @@ func (k *Byge) RoleOn(ctx context.Context, u identity.User, boardID model.ID) (m
 	if err != nil {
 		return "", err
 	}
-	return roles[boardID], nil
+	if r := roles[boardID]; r != "" {
+		return r, nil
+	}
+	// A board the caller holds no grant on. The bootstrap owner is treated as
+	// its owner only while it has no owner of its own, which is what lets them
+	// reach it to claim it; everyone else gets nothing, so an ownerless board
+	// leaks to no arbitrary caller. Checked only on the miss, so it costs a
+	// grant read for the bootstrap owner alone and nothing for anybody else.
+	// The decision is against RoleOn's explicit u, not the ctx user, so the
+	// predicate used here is the user-based addrIsBootstrapOwner.
+	if k.addrIsBootstrapOwner(u) {
+		owned, err := k.boardHasOwner(ctx, boardID)
+		if err != nil {
+			return "", err
+		}
+		if !owned {
+			return model.RoleOwner, nil
+		}
+	}
+	return "", nil
+}
+
+// OwnerlessBoards lists the boards with no owner grant, for the bootstrap owner
+// to claim. Empty for every other caller, so an ownerless board is a thing only
+// the bootstrap owner can even see exists. Not board-scoped and refuses nothing;
+// it filters, like VisibleBoardList, so it is named in allowNoRequire.
+//
+// The body is ListBoards plus one boardHasOwner per board, written on the same
+// boardHasOwner the RoleOn ownerless branch uses, so the two deciders of "is
+// this board ownerless" cannot drift. A store read error from either ListBoards
+// or boardHasOwner is returned, never swallowed into a shorter list, for the
+// same reason boardHasOwner returns its error: a blip must not read as
+// "ownerless". The N+1 is accepted — the ownerless set the Pi recovery targets
+// is the single default board — and replacing it with a bespoke store query is
+// forbidden without a test pinning OwnerlessBoards to the RoleOn branch.
+func (k *Byge) OwnerlessBoards(ctx context.Context) ([]model.Board, error) {
+	if !k.isBootstrapOwner(ctx) {
+		return nil, nil
+	}
+	all, err := k.store.ListBoards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []model.Board
+	for _, b := range all {
+		owned, err := k.boardHasOwner(ctx, b.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !owned {
+			out = append(out, b)
+		}
+	}
+	return out, nil
 }
 
 // VisibleBoards is every board this caller holds any role on, with the role.

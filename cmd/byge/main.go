@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
 	// The zone database, in the binary. A board's office hours are local hours,
 	// and time.LoadLocation on a host without /usr/share/zoneinfo falls back to
 	// UTC, which is a response-time badge that is an hour or two out and says
@@ -149,7 +150,7 @@ func openStore(cfg config.Config) (store.Store, error) {
 // serve runs the HTTP server until the context is cancelled, then gives
 // in-flight requests a moment to finish before returning.
 func serve(ctx context.Context, cfg config.Config, st store.Store, log *slog.Logger) int {
-	svc := service.New(st)
+	svc := service.New(st, service.WithBootstrapOwner(cfg.AuthBootstrapOwner))
 	boards, err := svc.EnsureDefaultBoard(ctx)
 	if err != nil {
 		log.Error("prepare default board", "err", err)

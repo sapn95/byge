@@ -192,6 +192,9 @@ type boardsPage struct {
 	User      identity.User
 	BoardSlug string
 	Boards    []model.Board
+	// Ownerless is the boards with no owner that the bootstrap owner may claim,
+	// empty for everyone else, rendered as a distinct block on the boards page.
+	Ownerless []model.Board
 	Error     string
 }
 

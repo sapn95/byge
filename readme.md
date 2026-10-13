@@ -201,6 +201,7 @@ ACCESS_AUD=                # AUTH_MODE=access only, the application's AUD tag
 AUTH_REQUIRED=false        # true: refuse a request that arrives with no identity
 AUTH_GROUPS_HEADER=        # AUTH_MODE=proxy only, one comma-separated list of groups
 ACCESS_GROUPS_CLAIM=       # AUTH_MODE=access only, the claim holding them, default groups
+AUTH_BOOTSTRAP_OWNER=       # an address: the only caller who may claim an ownerless board, and who manages local groups
 
 # Who the board says may see it. Shown in the app bar and enforced nowhere:
 # the sign-in in front of the board is what actually admits anybody.
@@ -245,6 +246,41 @@ with everything else, so the way to read a build off a running deployment
 becomes the footer on the board or `byge version` in the container. It needs
 `AUTH_MODE=proxy` or `access`, and the trade is that a key rotation the app
 cannot follow now refuses the page rather than drawing it signed out.
+
+`AUTH_BOOTSTRAP_OWNER` is byge's global admin: the one address that may claim a
+board with no owner, and the one address that may manage the local groups. It is
+an address, matched against the signed-in caller the same way a grant is, so set
+it to the owner's own sign-in address. It is unset by default, and while it is
+unset nobody can claim a board or manage groups. That is the secure default: an
+instance that has not been told who its owner is has no global admin, so it hands
+nobody the board-crossing powers.
+
+#### Giving a fresh board an owner
+
+A fresh database has a default board and no grants on it, so the board has no
+owner. `AUTH_BOOTSTRAP_OWNER` is how it gets one:
+
+1. Set `AUTH_BOOTSTRAP_OWNER` to the owner's address on the deployment, in an
+   auth mode that signs that person in (on a Pi behind the tunnel, the
+   Cloudflare Access path).
+2. The owner signs in. Their request now matches the bootstrap owner; nothing
+   else does.
+3. The default board shows up for them under "Boards waiting to be claimed",
+   because an ownerless board is reachable by the bootstrap owner and by nobody
+   else.
+4. The owner claims it, which writes their owner grant. The board is now a
+   normal owned board, and the access page takes over.
+5. The owner grants `write` to whoever else writes to the board.
+
+The Raspberry Pi runs with `AUTH_REQUIRED=false` so the pod-to-pod ämtli jobs,
+which carry no sign-in, can write. Under an enforcing release that is not what
+keeps ämtli writing: an anonymous caller holds no role on any board, so a write
+is refused whatever `AUTH_REQUIRED` says, and the claim does not change that.
+What keeps ämtli writing is a `write` grant to ämtli's own principal, which the
+owner adds through the access page once they hold the board. So do the claim and
+the ämtli grant while the Pi is still non-enforcing, and treat turning
+`AUTH_REQUIRED` on as a later step, after every principal that needs a role has
+one. Then ämtli never has a window where its writes are refused.
 
 ### When it does not come up
 

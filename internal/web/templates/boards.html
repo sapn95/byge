@@ -41,6 +41,27 @@
   {{else}}
   <p class="mb-6 text-slate-600 dark:text-slate-300">No boards yet. Create the first one.</p>
   {{end}}
+  {{if .Ownerless}}
+  <!-- The bootstrap owner's onboarding block: boards with no owner, which only
+       they can see. Claiming one writes the owner grant that takes it out of
+       this list. Absent, not merely empty, for every other caller, so their
+       page is unchanged. -->
+  <h2 class="text-xl font-bold mb-4">Boards waiting to be claimed</h2>
+  <ul class="space-y-2 mb-6">
+    {{range .Ownerless}}
+    <li class="flex flex-wrap items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700">
+      <span class="flex-1 min-w-0 px-4 py-3">
+        <span class="font-semibold">{{.Name}}</span>
+        <span class="text-sm text-slate-500 dark:text-slate-400 ml-2">{{len .Columns}} columns</span>
+      </span>
+      <form method="post" action="/b/{{.Slug}}/claim" class="shrink-0 pr-2">
+        <button type="submit"
+          class="px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Claim</button>
+      </form>
+    </li>
+    {{end}}
+  </ul>
+  {{end}}
   <form method="post" action="/boards" class="flex gap-2">
     <input type="text" name="name" placeholder="New board name" required maxlength="100"
       class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white">

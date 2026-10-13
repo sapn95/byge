@@ -1,11 +1,11 @@
 # Endpoints
 
-Every route the server answers, all 52 of them, registered in one block in
+Every route the server answers, all 53 of them, registered in one block in
 `internal/web/server.go`. A test compares this file against that block and
 fails when either side has something the other does not, so a route cannot be
 added or removed without the table changing with it.
 
-The last of those 52 is the JSON API, which brings its own thirty-one routes under
+The last of those 53 is the JSON API, which brings its own thirty-one routes under
 `/api/v1/` and its own document; the [table below](#the-json-api) gives it one
 row. This file is about the page routes.
 
@@ -140,20 +140,22 @@ is an allow list and nothing else; there is no deny list.
 | `GET /b/{board}/access` | | The board's grants, each a principal and its role, with the form that adds one. `403` for anyone but an owner |
 | `POST /b/{board}/access` | `kind` (`user`\|`group`\|`idp`), `id`, `role` (`read`\|`write`\|`owner`) | `303` to the access page. `400` re-renders it with the reason, including a grant to a local group that does not exist, and a change that would leave the board with no owner |
 | `POST /b/{board}/access/delete` | `kind`, `id` | `303` to the access page. Removing the last owner is refused with `400` |
+| `POST /b/{board}/claim` | | `303` to the board. Claims an ownerless board for the bootstrap owner. `403` for anyone else, and for a board that already has an owner |
 
 ## Local groups
 
 The groups kept in byge's own database, as opposed to the group names an
-identity provider sends. A grant on any board can name one. Any signed-in
-person may manage them; an anonymous request and a service token both get a
-`403`.
+identity provider sends. A grant on any board can name one. Only the bootstrap
+owner (`AUTH_BOOTSTRAP_OWNER`) may manage them; an anonymous request, a service
+token, and any other signed-in caller all get a `403`. With
+`AUTH_BOOTSTRAP_OWNER` unset nobody can, which is the secure default.
 
 | Route | Sends | Answers |
 |-------|-------|---------|
-| `GET /groups` | | Every local group with its members, and the form that makes another. `403` when nobody is signed in |
-| `POST /groups` | `name`, `members` (one address per line) | `303` to the groups page. `400` re-renders it with the reason; `409` on a duplicate name |
-| `POST /groups/{id}` | `name`, `members` | as above; `404` when the group is gone |
-| `POST /groups/{id}/delete` | | `303` to the groups page. The group and every grant made to it go |
+| `GET /groups` | | Every local group with its members, and the form that makes another. `403` for anyone but the bootstrap owner |
+| `POST /groups` | `name`, `members` (one address per line) | `303` to the groups page. `400` re-renders it with the reason; `409` on a duplicate name. `403` for anyone but the bootstrap owner |
+| `POST /groups/{id}` | `name`, `members` | as above; `404` when the group is gone. `403` for anyone but the bootstrap owner |
+| `POST /groups/{id}/delete` | | `303` to the groups page. The group and every grant made to it go. `403` for anyone but the bootstrap owner |
 
 ## The JSON API
 

@@ -23,11 +23,23 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if len(boards) == 1 {
+	ownerless, err := s.svc.OwnerlessBoards(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// The single-board redirect yields to an ownerless board: VisibleBoardList
+	// is grant-only, so the bootstrap owner who holds one owned board while an
+	// ownerless board waits would be redirected past the claim block. Redirect
+	// only when there is one board and nothing to claim.
+	if len(boards) == 1 && len(ownerless) == 0 {
 		http.Redirect(w, r, "/b/"+boards[0].Slug, http.StatusSeeOther)
 		return
 	}
-	s.render(w, s.pages["boards"], "layout", http.StatusOK, boardsPage{Title: "Byge", User: identity.FromContext(r.Context()), Boards: boards})
+	s.render(w, s.pages["boards"], "layout", http.StatusOK, boardsPage{
+		Title: "Byge", User: identity.FromContext(r.Context()),
+		Boards: boards, Ownerless: ownerless,
+	})
 }
 
 // boardList draws every board the caller may read and the form that makes
@@ -38,8 +50,13 @@ func (s *Server) boardList(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	ownerless, err := s.svc.OwnerlessBoards(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, s.pages["boards"], "layout", http.StatusOK,
-		boardsPage{Title: "Boards", User: identity.FromContext(r.Context()), Boards: boards})
+		boardsPage{Title: "Boards", User: identity.FromContext(r.Context()), Boards: boards, Ownerless: ownerless})
 }
 
 // navBoards is the list behind the board name in the app bar. A read that fails
@@ -183,6 +200,25 @@ func (s *Server) setLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.svc.SetBoardLayout(r.Context(), b.ID, r.FormValue("layout")); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/b/"+b.Slug, http.StatusSeeOther)
+}
+
+// claimBoard makes the bootstrap owner the owner of an ownerless board. The
+// board is resolved through s.svc.Board, which runs require(RoleRead): an
+// arbitrary caller cannot read an ownerless board (RoleOn returns ""), so the
+// 404/403 for an unknown slug or an unreadable board comes from there, before
+// ClaimBoard. The bootstrap owner passes that gate on an ownerless board
+// through the RoleOn shortcut, and ClaimBoard then writes the owner grant.
+func (s *Server) claimBoard(w http.ResponseWriter, r *http.Request) {
+	b, err := s.svc.Board(r.Context(), r.PathValue("board"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.svc.ClaimBoard(r.Context(), b.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}

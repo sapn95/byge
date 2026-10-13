@@ -45,6 +45,7 @@ Who is making the request. See [docs/adr/0005](adr/0005-request-identity.md) for
 | `ACCESS_TEAM_DOMAIN` | *(unset)* | e.g. team.cloudflareaccess.com |
 | `ACCESS_AUD` | *(unset)* | the Access application's AUD tag |
 | `AUTH_REQUIRED` | `false` | true: a request with no identity is refused rather than served |
+| `AUTH_BOOTSTRAP_OWNER` | *(unset)* | an address: the only caller who may claim a board that has no owner, and who sees an ownerless board meanwhile; lowercased on read |
 
 Where the caller's groups come from, so that a board can be granted a role on a group the identity provider keeps rather than one kept here. Both are empty by default: a deployment that sets neither has only the groups in its own database, which is the setup that needs nothing configured anywhere else. `AUTH_GROUPS_HEADER` is read in proxy mode and holds one comma-separated list. It is worth only as much as the proxy in front of the port: a caller that reaches the port another way sets its own. That was already true of `AUTH_HEADER`, but an address decided whose name went on a card and a group decides who may write.
 

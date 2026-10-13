@@ -9,20 +9,18 @@ import (
 	"context"
 	"strings"
 
-	"byge/internal/identity"
 	"byge/internal/model"
 )
 
 // requireGroupAdmin decides who may manage the groups kept in this database.
 // Local groups are global and a grant can point at one, so managing them is a
-// board-crossing power; this is the one place that power is gated. Today it is
-// any identified person — on a single-tenant instance behind Access that is the
-// trusted set, and a fresh board has no groups until someone makes one. A
-// service token is not a person, so a machine credential cannot manage groups.
-// Stage 5 replaces the body with the AUTH_BOOTSTRAP_OWNER check once that
-// exists; every caller goes through here so that is a one-line change.
+// board-crossing power; this is the one place that power is gated. Only the
+// bootstrap owner may: everyone else — anonymous, a service token, or an
+// ordinary signed-in caller — is refused. With AUTH_BOOTSTRAP_OWNER unset
+// isBootstrapOwner is false for everyone, so nobody can manage groups, which is
+// the secure default for an instance that has not been told who its owner is.
 func (k *Byge) requireGroupAdmin(ctx context.Context) error {
-	if !identity.FromContext(ctx).Person() {
+	if !k.isBootstrapOwner(ctx) {
 		return ErrForbidden
 	}
 	return nil

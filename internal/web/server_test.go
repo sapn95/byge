@@ -65,7 +65,12 @@ func newEnv(t *testing.T, st store.Store, ready func(context.Context) error, opt
 	if st == nil {
 		st = memory.New()
 	}
-	svc := service.New(st, service.WithClock(func() time.Time { return today }))
+	// The default request caller, ownerEmail, is also the bootstrap owner, so
+	// an ordinary request in these tests can manage groups and claim a board.
+	// The policy lives in the service; the web layer reads it through s.svc,
+	// so there is no web Option for it and none is added.
+	svc := service.New(st, service.WithClock(func() time.Time { return today }),
+		service.WithBootstrapOwner(ownerEmail))
 	logBuf := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	h := New(svc, ready, logger, append([]Option{WithClock(func() time.Time { return today })}, opts...)...)

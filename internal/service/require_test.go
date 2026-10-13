@@ -43,6 +43,8 @@ func TestEveryBoardScopedMethodRequires(t *testing.T) {
 		"CreateGroup":        "not board-scoped; guarded by requireGroupAdmin",
 		"UpdateGroup":        "not board-scoped; guarded by requireGroupAdmin",
 		"DeleteGroup":        "not board-scoped; guarded by requireGroupAdmin",
+		"ClaimBoard":         "guarded by isBootstrapOwner, a global check like requireGroupAdmin; a board with no owner has no RoleOwner to require",
+		"OwnerlessBoards":    "lists ownerless boards for the bootstrap owner only; filters like VisibleBoardList rather than refusing",
 	}
 
 	fset := token.NewFileSet()
@@ -90,7 +92,7 @@ func TestEveryBoardScopedMethodRequires(t *testing.T) {
 	// name falls straight through.
 	for method := range allowNoRequire {
 		if !seen[method] {
-			t.Errorf("allowNoRequire names %s, which is not an exported *Byge method in service.go or access.go", method)
+			t.Errorf("allowNoRequire names %s, which is not an exported *Byge method in service.go, access.go, grants.go or groups.go", method)
 		}
 	}
 }
