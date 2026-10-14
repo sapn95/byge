@@ -59,6 +59,13 @@ Where the caller's groups come from, so that a board can be granted a role on a 
 |---|---|---|
 | `ACCESS_GROUPS_CLAIM` | *(unset)* | access mode only; empty means the claim named groups, where Cloudflare puts them unless the connection maps them elsewhere |
 
+A service identity for a trusted in-cluster caller that cannot carry a Cloudflare assertion, read in access mode. See [docs/adr/0005](adr/0005-request-identity.md) for the trust basis: a header is a claim by whatever wrote it, and is sound only where the port is unreachable except through the thing that sets it. The network policy in front of this port already guarantees that, which is the same basis proxy mode documents for its own header. Both empty by default: a deployment that sets neither has no service identity and the branch is inert, exactly like AUTH_BOOTSTRAP_OWNER.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `AUTH_SERVICE_HEADER` | *(unset)* | access mode only; the header whose mere presence marks a request as the service caller, set only by a network-isolated in-cluster caller |
+| `AUTH_SERVICE_GROUP` | *(unset)* | the idp group name that caller is treated as holding, so the owner can grant it through the access page; lowercased on read |
+
 Who the board says may see it, as a mail address list: `Ada Lovelace <ada@example.com>, grace@example.com`. Shown in the app bar and nowhere else. This is a copy of a list kept somewhere else, so one address per person is what reads well, and the sign-in in front of the board is what the copy has to agree with. It is drawn only for a caller the board identified. In `access` mode that means a verified assertion; in `proxy` mode it means a header, which anything that can reach the port can set, so a port reachable any other way wants `AUTH_REQUIRED` as well.
 
 | Variable | Default | Notes |

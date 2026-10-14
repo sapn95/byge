@@ -72,6 +72,17 @@ type Config struct {
 	// assertion, so a caller cannot choose its own.
 	AccessGroupsClaim string `env:"ACCESS_GROUPS_CLAIM"` // access mode only; empty means the claim named groups, where Cloudflare puts them unless the connection maps them elsewhere
 
+	// A service identity for a trusted in-cluster caller that cannot carry a
+	// Cloudflare assertion, read in access mode. See docs/adr/0005 for the
+	// trust basis: a header is a claim by whatever wrote it, and is sound only
+	// where the port is unreachable except through the thing that sets it. The
+	// network policy in front of this port already guarantees that, which is the
+	// same basis proxy mode documents for its own header. Both empty by
+	// default: a deployment that sets neither has no service identity and the
+	// branch is inert, exactly like AUTH_BOOTSTRAP_OWNER.
+	AuthServiceHeader string `env:"AUTH_SERVICE_HEADER"` // access mode only; the header whose mere presence marks a request as the service caller, set only by a network-isolated in-cluster caller
+	AuthServiceGroup  string `env:"AUTH_SERVICE_GROUP"`  // the idp group name that caller is treated as holding, so the owner can grant it through the access page; lowercased on read
+
 	// Who the board says may see it, as a mail address list: `Ada Lovelace
 	// <ada@example.com>, grace@example.com`. Shown in the app bar and nowhere
 	// else. This is a copy of a list kept somewhere else, so one address per
@@ -166,6 +177,8 @@ func FromEnv(get Lookup) (Config, error) {
 		AccessAudience:     env("ACCESS_AUD", ""),
 		AuthGroupsHeader:   env("AUTH_GROUPS_HEADER", ""),
 		AccessGroupsClaim:  env("ACCESS_GROUPS_CLAIM", ""),
+		AuthServiceHeader:  env("AUTH_SERVICE_HEADER", ""),
+		AuthServiceGroup:   strings.ToLower(env("AUTH_SERVICE_GROUP", "")),
 		LogLevel:           strings.ToLower(env("LOG_LEVEL", "info")),
 		LogFormat:          strings.ToLower(env("LOG_FORMAT", "text")),
 
@@ -328,6 +341,19 @@ func (c Config) Validate() error {
 	}
 	if c.AuthMode == AuthProxy && c.AuthHeader == "" {
 		return fmt.Errorf("AUTH_HEADER: required when AUTH_MODE is %q", AuthProxy)
+	}
+	// The service identity needs both halves: a header with no group marks the
+	// caller but gives it no principal to be granted, and a group with no
+	// header is a principal nothing can ever present. Refused on start, like
+	// the backup-target guards, rather than discovered as a silent no-op.
+	if (c.AuthServiceHeader == "") != (c.AuthServiceGroup == "") {
+		return fmt.Errorf("AUTH_SERVICE_HEADER and AUTH_SERVICE_GROUP: set both or neither; a header with no group grants nothing, and a group with no header can never be presented")
+	}
+	// The service header is read only in access mode, so setting it under none
+	// or proxy is a knob that turns nothing. Refused on start. (Proxy mode
+	// carries a group through AUTH_GROUPS_HEADER instead.)
+	if c.AuthServiceHeader != "" && c.AuthMode != AuthAccess {
+		return fmt.Errorf("AUTH_SERVICE_HEADER: read only when AUTH_MODE is %q; in %q it turns nothing", AuthAccess, c.AuthMode)
 	}
 	// Nothing can be identified in none mode, so requiring an identity there
 	// would refuse every request including the operator's. Refused on start

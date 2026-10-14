@@ -227,6 +227,11 @@ func identityMiddleware(cfg config.Config, log *slog.Logger) func(http.Handler) 
 		// usually a key rotation or an expired session, and turning either
 		// into an outage would be worse than serving the page anonymously.
 		ic.OnError = func(err error) { log.Warn("access assertion rejected", "err", err) }
+		// Set inside the access block only, so in every other mode
+		// ic.ServiceHeader stays empty and the middleware branch is unreachable
+		// there whatever the env var says.
+		ic.ServiceHeader = cfg.AuthServiceHeader
+		ic.ServiceGroup = cfg.AuthServiceGroup
 	}
 	if cfg.AuthMode != config.AuthNone {
 		anonymous := "served"

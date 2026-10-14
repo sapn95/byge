@@ -14,27 +14,31 @@ import (
 // scheme the caller could satisfy by asking again.
 var ErrForbidden = errors.New("not allowed on this board")
 
-// Principals is everything a caller is, for matching against grants: the
-// address itself, every group kept here that the address belongs to, and
-// every group name the identity provider sent.
+// Principals is everything a caller is, for matching against grants.
 //
-// A caller with no address is no principals, even when the provider sent
-// groups: a group name arriving beside no identity is a header with nobody
-// behind it. A service token is no principals either, for the same reason it
-// is not a person, so a token reaches a board only through a grant to the
-// address its deployment gives it, which it has not got. That is deliberate:
-// a machine credential that could read every board the moment grants exist
-// would be the hole this change is closing.
+// A caller with an address is that address, every local group kept here that
+// holds the address, and every idp group the provider sent, in that order. A
+// caller with no address carries no user principal and no local-group
+// membership — both need an address — but it does carry any idp groups that
+// arrived with the request. The C1 service identity is exactly that: a
+// non-person with a configured idp group, grantable through the access page. A
+// machine credential with no configured group (a Cloudflare service token)
+// carries no group, so it is still no principals and reaches no board, which is
+// the hole stages 3-5 closed.
 func (k *Byge) Principals(ctx context.Context, u identity.User) ([]model.Principal, error) {
 	if !u.Person() {
-		return nil, nil
+		// A caller with no address is not a user principal and has no local
+		// group membership (both need an address). It can still carry idp
+		// groups that arrived with the request — the C1 service identity does.
+		// A Cloudflare service token carries none, so it stays principal-less
+		// and reaches no board, which is the hole stages 3-5 closed.
+		return idpPrincipals(u.Groups), nil
 	}
 	out := []model.Principal{model.UserPrincipal(u.Email)}
-	for _, g := range u.Groups {
-		if p := model.IDPPrincipal(g); p.Valid() {
-			out = append(out, p)
-		}
-	}
+	// Order is load-bearing: TestPrincipals asserts [user, idp, group] by
+	// index. idpPrincipals is appended after the user principal and before the
+	// GroupsOf loop; do not move it to the end of the function.
+	out = append(out, idpPrincipals(u.Groups)...)
 	ids, err := k.store.GroupsOf(ctx, u.Email)
 	if err != nil {
 		return nil, err
@@ -43,6 +47,18 @@ func (k *Byge) Principals(ctx context.Context, u identity.User) ([]model.Princip
 		out = append(out, model.GroupPrincipal(id))
 	}
 	return out, nil
+}
+
+// idpPrincipals turns the group names that arrived with the request into idp
+// principals, dropping any that are not valid.
+func idpPrincipals(groups []string) []model.Principal {
+	out := make([]model.Principal, 0, len(groups))
+	for _, g := range groups {
+		if p := model.IDPPrincipal(g); p.Valid() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // addrIsBootstrapOwner reports whether u is the configured AUTH_BOOTSTRAP_OWNER.

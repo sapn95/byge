@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"byge/internal/identity"
 	"byge/internal/model"
+	"byge/internal/store/memory"
 )
 
 // grant gives a principal a role on a board, straight through the store,
@@ -32,7 +35,10 @@ func mustMakeBoard(t *testing.T, k *Byge, name string) *model.Board {
 }
 
 // A caller is their address, the groups kept here that hold the address, and
-// the groups the provider sent. Anything with no address is none of those.
+// the groups the provider sent. A caller with no address carries no user
+// principal and no local-group membership, but it does carry any idp groups
+// that arrived with the request — the service identity is exactly that. A
+// non-person with no groups still holds nothing.
 func TestPrincipals(t *testing.T) {
 	k := newSvc(t)
 	ctx := context.Background()
@@ -60,15 +66,13 @@ func TestPrincipals(t *testing.T) {
 		}
 	}
 
-	// Nobody, and a machine, are no principals. A service token that counted
-	// as a principal would reach whatever its deployment granted the empty
-	// address, and a group name beside no address is a header with nobody
-	// behind it.
+	// A non-person with no groups is still no principals: a Cloudflare service
+	// token that counted as a principal would reach whatever its deployment
+	// granted the empty address. That is the hole stages 3-5 closed, and it
+	// stays closed.
 	for _, u := range []identity.User{
 		{},
 		{Service: "ci-token"},
-		{Service: "ci-token", Groups: []string{"platform-team"}},
-		{Groups: []string{"platform-team"}},
 	} {
 		ps, err = k.Principals(ctx, u)
 		if err != nil {
@@ -77,6 +81,123 @@ func TestPrincipals(t *testing.T) {
 		if len(ps) != 0 {
 			t.Errorf("Principals(%+v) = %v, want none", u, ps)
 		}
+	}
+
+	// A non-person that carries idp groups holds exactly those, as idp
+	// principals, and nothing else: no user principal, no local-group lookup.
+	// This is the narrowed invariant the service identity rides on.
+	for _, u := range []identity.User{
+		{Service: "ci-token", Groups: []string{"platform-team"}},
+		{Groups: []string{"platform-team"}},
+	} {
+		ps, err = k.Principals(ctx, u)
+		if err != nil {
+			t.Fatalf("Principals(%+v): %v", u, err)
+		}
+		want := []model.Principal{{Kind: model.PrincipalIDP, ID: "platform-team"}}
+		if len(ps) != len(want) || ps[0] != want[0] {
+			t.Errorf("Principals(%+v) = %v, want %v", u, ps, want)
+		}
+	}
+}
+
+// The service identity is a non-person carrying one configured idp group. It
+// gets exactly that group as an idp principal, with no user principal and no
+// local-group lookup, and nothing at all when it carries no group.
+func TestServiceCallerPrincipals(t *testing.T) {
+	k := newSvc(t)
+	ctx := context.Background()
+
+	ps, err := k.Principals(ctx, identity.User{Service: "aemtli", Groups: []string{"service"}})
+	if err != nil {
+		t.Fatalf("Principals: %v", err)
+	}
+	want := []model.Principal{{Kind: model.PrincipalIDP, ID: "service"}}
+	if len(ps) != len(want) || ps[0] != want[0] {
+		t.Errorf("Principals(service with group) = %v, want %v", ps, want)
+	}
+
+	ps, err = k.Principals(ctx, identity.User{Service: "aemtli"})
+	if err != nil {
+		t.Fatalf("Principals(service no group): %v", err)
+	}
+	if len(ps) != 0 {
+		t.Errorf("Principals(service no group) = %v, want none", ps)
+	}
+}
+
+// The service caller is admitted on a board where its idp group holds a write
+// grant, and refused (403) on a board where it does not. This is the whole
+// point of the feature: a grantable service identity that the stage-3-5 model
+// admits only where granted.
+func TestServiceCallerGrantedWriteOnlyWhereGranted(t *testing.T) {
+	k := newSvc(t)
+	board := mustMakeBoard(t, k, "Granted")
+	other := mustMakeBoard(t, k, "Not granted")
+
+	grant(t, k, board.ID, model.IDPPrincipal("service"), model.RoleWrite)
+
+	serviceCtx := identity.NewContext(context.Background(),
+		identity.User{Service: "aemtli", Groups: []string{"service"}})
+
+	if err := k.require(serviceCtx, board.ID, model.RoleWrite); err != nil {
+		t.Errorf("require on the granted board = %v, want nil", err)
+	}
+	if err := k.require(serviceCtx, other.ID, model.RoleWrite); err != ErrForbidden {
+		t.Errorf("require on the ungranted board = %v, want ErrForbidden", err)
+	}
+
+	// And the grant is what admits it: proven through a write that reaches the
+	// store, and refused on the other board.
+	if _, err := k.CreateCard(serviceCtx, board.ID, board.Columns[0].ID, CardInput{Title: "from aemtli"}); err != nil {
+		t.Errorf("service CreateCard on the granted board = %v, want nil", err)
+	}
+	if _, err := k.CreateCard(serviceCtx, other.ID, other.Columns[0].ID, CardInput{Title: "x"}); err != ErrForbidden {
+		t.Errorf("service CreateCard on the ungranted board = %v, want ErrForbidden", err)
+	}
+}
+
+// The service caller is not a person, so it is never the bootstrap owner even
+// with the header set: it cannot claim an ownerless board and cannot manage
+// groups. Person()-gated predicates (addrIsBootstrapOwner, OwnerlessBoards,
+// ClaimBoard, requireGroupAdmin) all refuse it.
+func TestServiceCallerIsNotAPerson(t *testing.T) {
+	n := 0
+	k := New(memory.New(),
+		WithClock(func() time.Time { return fixed }),
+		WithIDs(func() model.ID { n++; return model.ID(fmt.Sprintf("id%03d", n)) }),
+		WithBootstrapOwner("owner@example.com"))
+
+	service := identity.User{Service: "aemtli", Groups: []string{"service"}}
+	serviceCtx := identity.NewContext(context.Background(), service)
+
+	if k.addrIsBootstrapOwner(service) {
+		t.Error("the service caller reads as the bootstrap owner")
+	}
+
+	b, err := k.CreateBoard(ownerCtx(), "Board", "", nil)
+	if err != nil {
+		t.Fatalf("CreateBoard: %v", err)
+	}
+
+	// An ownerless board the bootstrap owner could claim; the service caller
+	// cannot even see it, and cannot claim it.
+	ownerless, err := k.EnsureDefaultBoard(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureDefaultBoard: %v", err)
+	}
+	if got, err := k.OwnerlessBoards(serviceCtx); err != nil || got != nil {
+		t.Errorf("OwnerlessBoards(service) = %v, %v, want nil", got, err)
+	}
+	if err := k.ClaimBoard(serviceCtx, ownerless[0].ID); err != ErrForbidden {
+		t.Errorf("ClaimBoard(service) = %v, want ErrForbidden", err)
+	}
+
+	// Groups management is the bootstrap owner alone; the service caller is
+	// refused even on a board it was granted write on.
+	grant(t, k, b.ID, model.IDPPrincipal("service"), model.RoleWrite)
+	if err := k.requireGroupAdmin(serviceCtx); err != ErrForbidden {
+		t.Errorf("requireGroupAdmin(service) = %v, want ErrForbidden", err)
 	}
 }
 

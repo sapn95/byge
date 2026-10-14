@@ -233,6 +233,53 @@ func TestAuthMode(t *testing.T) {
 				}
 			},
 		},
+		{
+			// Both halves of the service identity in access mode: valid, and
+			// the group is lowercased on read so a typed grant matches it.
+			name: "the service identity validates in access mode and lowercases the group",
+			env: map[string]string{
+				"AUTH_MODE": "access", "ACCESS_TEAM_DOMAIN": "t.cloudflareaccess.com", "ACCESS_AUD": "abc",
+				"AUTH_SERVICE_HEADER": "X-Byge-Service", "AUTH_SERVICE_GROUP": "Service",
+			},
+			check: func(t *testing.T, c Config) {
+				if c.AuthServiceHeader != "X-Byge-Service" {
+					t.Errorf("AuthServiceHeader = %q", c.AuthServiceHeader)
+				}
+				if c.AuthServiceGroup != "service" {
+					t.Errorf("AuthServiceGroup = %q, want it lowercased", c.AuthServiceGroup)
+				}
+			},
+		},
+		{
+			name: "a service header with no group is refused",
+			env: map[string]string{
+				"AUTH_MODE": "access", "ACCESS_TEAM_DOMAIN": "t.cloudflareaccess.com", "ACCESS_AUD": "abc",
+				"AUTH_SERVICE_HEADER": "X-Byge-Service",
+			},
+			wantErr: "AUTH_SERVICE_HEADER and AUTH_SERVICE_GROUP",
+		},
+		{
+			name: "a service group with no header is refused",
+			env: map[string]string{
+				"AUTH_MODE": "access", "ACCESS_TEAM_DOMAIN": "t.cloudflareaccess.com", "ACCESS_AUD": "abc",
+				"AUTH_SERVICE_GROUP": "service",
+			},
+			wantErr: "AUTH_SERVICE_HEADER and AUTH_SERVICE_GROUP",
+		},
+		{
+			name: "a service header outside access mode is refused (none)",
+			env: map[string]string{
+				"AUTH_MODE": "none", "AUTH_SERVICE_HEADER": "X-Byge-Service", "AUTH_SERVICE_GROUP": "service",
+			},
+			wantErr: "AUTH_SERVICE_HEADER",
+		},
+		{
+			name: "a service header outside access mode is refused (proxy)",
+			env: map[string]string{
+				"AUTH_MODE": "proxy", "AUTH_SERVICE_HEADER": "X-Byge-Service", "AUTH_SERVICE_GROUP": "service",
+			},
+			wantErr: "AUTH_SERVICE_HEADER",
+		},
 	}
 
 	for _, tt := range tests {
