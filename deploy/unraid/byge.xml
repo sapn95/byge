@@ -10,7 +10,7 @@
 -->
 <Container version="2">
   <Name>byge</Name>
-  <Repository>ghcr.io/sapn95/byge:2.16.0</Repository>
+  <Repository>ghcr.io/sapn95/byge:2.17.0</Repository>
   <Registry>https://github.com/sapn95/byge/pkgs/container/byge</Registry>
   <Project>https://github.com/sapn95/byge</Project>
   <Support>https://github.com/sapn95/byge/issues</Support>
