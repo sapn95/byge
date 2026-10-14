@@ -262,6 +262,14 @@ type Config struct {
 	// groups kept in this database apply. See User.Groups for what trusting
 	// it costs.
 	GroupsHeader string
+	// ServiceHeader, in ModeAccess only, marks a request as the configured
+	// service identity by its mere presence. The trust basis is the network
+	// policy in front of the port, the same basis ModeProxy's Header relies
+	// on. Empty disables it.
+	ServiceHeader string
+	// ServiceGroup is the single idp group the service caller is treated as
+	// holding, so a board can grant it. Empty disables the service identity.
+	ServiceGroup string
 	// Verifier validates the assertion in ModeAccess.
 	Verifier interface {
 		Verify(ctx context.Context, token string) (User, error)
@@ -300,6 +308,12 @@ func ProbePath(p string) bool { return p == "/healthz" || p == "/readyz" }
 // The header Cloudflare Access sets on every request it forwards.
 const AccessAssertionHeader = "Cf-Access-Jwt-Assertion"
 
+// ServiceCaller is the name a header-identified in-cluster service carries in
+// User.Service. It is not an address: Author() renders it "service:<name>" and
+// Person() stays false, so the caller writes no name onto a card and is never
+// mistaken for the bootstrap owner.
+const ServiceCaller = "aemtli"
+
 // Middleware puts the request's user into the context.
 func Middleware(cfg Config) func(http.Handler) http.Handler {
 	header := cfg.Header
@@ -332,6 +346,17 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 					} else {
 						u = v
 					}
+				}
+				// A trusted in-cluster caller that carries no assertion. Only
+				// when the request did not already verify as somebody, so a
+				// real person is never overridden by the header, and only when
+				// the header is set, which the config gates on access mode and
+				// on the group being set too. Presence is the signal; the
+				// value is not read. The network policy in front of the port
+				// is the trust basis — see the package doc on what a header is
+				// worth, and docs/adr/0005.
+				if u.Anonymous() && cfg.ServiceHeader != "" && r.Header.Get(cfg.ServiceHeader) != "" {
+					u = User{Service: ServiceCaller, Groups: normalGroups([]string{cfg.ServiceGroup})}
 				}
 			}
 			if u.Anonymous() {

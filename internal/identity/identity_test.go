@@ -437,6 +437,117 @@ func TestMiddleware(t *testing.T) {
 	}
 }
 
+// The service identity is a third source of truth in access mode: a trusted
+// in-cluster caller that carries no assertion but does carry a configured
+// header. These pin that it establishes the caller, that a real assertion wins
+// over it, that it is inert outside access mode and when unset, that
+// AUTH_REQUIRED does not refuse it, and that the group name is normalised.
+func TestServiceIdentity(t *testing.T) {
+	s := newSigner(t, "k1")
+	v := verifierFor(certServer(t, nil, s))
+	good := s.token(t, "RS256", nil)
+
+	serve := func(t *testing.T, cfg identity.Config, headers map[string]string) identity.User {
+		t.Helper()
+		var got identity.User
+		h := identity.Middleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			got = identity.FromContext(r.Context())
+		}))
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		for k, val := range headers {
+			req.Header.Set(k, val)
+		}
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		return got
+	}
+
+	// 1. The header establishes the service caller in access mode.
+	t.Run("the header establishes the service caller", func(t *testing.T) {
+		u := serve(t, identity.Config{Mode: identity.ModeAccess, Verifier: v,
+			ServiceHeader: "X-Byge-Service", ServiceGroup: "service"},
+			map[string]string{"X-Byge-Service": "1"})
+		if u.Service != identity.ServiceCaller {
+			t.Errorf("Service = %q, want %q", u.Service, identity.ServiceCaller)
+		}
+		if len(u.Groups) != 1 || u.Groups[0] != "service" {
+			t.Errorf("Groups = %v, want [service]", u.Groups)
+		}
+		if u.Person() {
+			t.Error("the service caller reports as a person")
+		}
+		if u.Anonymous() {
+			t.Error("the service caller reports as anonymous")
+		}
+	})
+
+	// 2. A real assertion wins over the header: the Anonymous() guard runs
+	// first, so a verified person is never overridden by the service branch.
+	t.Run("a real assertion wins over the header", func(t *testing.T) {
+		u := serve(t, identity.Config{Mode: identity.ModeAccess, Verifier: v,
+			ServiceHeader: "X-Byge-Service", ServiceGroup: "service"},
+			map[string]string{identity.AccessAssertionHeader: good, "X-Byge-Service": "1"})
+		if u.Email != "someone@example.com" {
+			t.Errorf("Email = %q, want the assertion's person", u.Email)
+		}
+		if u.Service != "" {
+			t.Errorf("Service = %q, want the header ignored for a verified person", u.Service)
+		}
+	})
+
+	// 3. The branch lives in the ModeAccess case, so a header set directly on
+	// the config in proxy or none mode is never read.
+	t.Run("the header is inert outside access mode", func(t *testing.T) {
+		for _, mode := range []identity.Mode{identity.ModeProxy, identity.ModeNone} {
+			u := serve(t, identity.Config{Mode: mode, Header: "X-User",
+				ServiceHeader: "X-Byge-Service", ServiceGroup: "service"},
+				map[string]string{"X-Byge-Service": "1"})
+			if u.Service != "" {
+				t.Errorf("mode %q: Service = %q, want the header ignored", mode, u.Service)
+			}
+		}
+	})
+
+	// 4. With ServiceHeader unset the branch does not fire, even when the
+	// request carries the header anyway.
+	t.Run("an unset header is inert", func(t *testing.T) {
+		u := serve(t, identity.Config{Mode: identity.ModeAccess, Verifier: v},
+			map[string]string{"X-Byge-Service": "1"})
+		if !u.Anonymous() {
+			t.Errorf("want anonymous when the service header is unset, got %+v", u)
+		}
+	})
+
+	// 5. AUTH_REQUIRED does not refuse the service caller: it is identified,
+	// so the Required 403 branch does not fire for it.
+	t.Run("AUTH_REQUIRED does not refuse the service caller", func(t *testing.T) {
+		served := false
+		h := identity.Middleware(identity.Config{Mode: identity.ModeAccess, Verifier: v, Required: true,
+			ServiceHeader: "X-Byge-Service", ServiceGroup: "service"})(
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				served = true
+				w.WriteHeader(http.StatusOK)
+			}))
+		req := httptest.NewRequest(http.MethodGet, "/b/demo", nil)
+		req.Header.Set("X-Byge-Service", "1")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !served {
+			t.Errorf("status = %d, served = %v, want the service caller through", rec.Code, served)
+		}
+	})
+
+	// 6. The configured group is normalised, so a grant the owner types as
+	// "service" matches a configured "Service".
+	t.Run("the group name is normalised", func(t *testing.T) {
+		u := serve(t, identity.Config{Mode: identity.ModeAccess, Verifier: v,
+			ServiceHeader: "X-Byge-Service", ServiceGroup: "Service"},
+			map[string]string{"X-Byge-Service": "1"})
+		if len(u.Groups) != 1 || u.Groups[0] != "service" {
+			t.Errorf("Groups = %v, want [service]", u.Groups)
+		}
+	})
+}
+
 func TestMiddlewareReportsVerificationFailures(t *testing.T) {
 	s := newSigner(t, "k1")
 	v := verifierFor(certServer(t, nil, s))

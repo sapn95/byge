@@ -202,6 +202,8 @@ AUTH_REQUIRED=false        # true: refuse a request that arrives with no identit
 AUTH_GROUPS_HEADER=        # AUTH_MODE=proxy only, one comma-separated list of groups
 ACCESS_GROUPS_CLAIM=       # AUTH_MODE=access only, the claim holding them, default groups
 AUTH_BOOTSTRAP_OWNER=       # an address: the only caller who may claim an ownerless board, and who manages local groups
+AUTH_SERVICE_HEADER=        # AUTH_MODE=access only, its presence marks a trusted in-cluster caller
+AUTH_SERVICE_GROUP=         # the idp group that caller holds, to grant through the access page
 
 # Who the board says may see it. Shown in the app bar and enforced nowhere:
 # the sign-in in front of the board is what actually admits anybody.
