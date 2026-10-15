@@ -27,17 +27,18 @@ var templateFiles embed.FS
 
 // Server is the HTTP front-end.
 type Server struct {
-	svc     *service.Byge
-	ready   func(context.Context) error
-	log     *slog.Logger
-	now     func() time.Time
-	version string
-	commit  string
-	avatars *avatars                      // nil unless pictures are configured
-	viewers []identity.User               // empty unless a roster is configured
-	api     http.Handler                  // nil unless the JSON API is mounted
-	pages   map[string]*template.Template // full pages, keyed by name
-	parts   *template.Template            // the layout and every fragment a page reuses
+	svc          *service.Byge
+	ready        func(context.Context) error
+	log          *slog.Logger
+	now          func() time.Time
+	version      string
+	commit       string
+	avatars      *avatars                      // nil unless pictures are configured
+	viewers      []identity.User               // empty unless a roster is configured
+	serviceGroup string                        // AUTH_SERVICE_GROUP, for the access page's suggestions
+	api          http.Handler                  // nil unless the JSON API is mounted
+	pages        map[string]*template.Template // full pages, keyed by name
+	parts        *template.Template            // the layout and every fragment a page reuses
 }
 
 // apiPrefix is where WithAPI mounts its handler. It is api.Prefix written out:
@@ -74,6 +75,11 @@ func WithAvatars(logins map[string]string) Option {
 func WithViewers(people []identity.User) Option {
 	return func(s *Server) { s.viewers = people }
 }
+
+// WithServiceGroup names the idp group the in-cluster service caller holds
+// (AUTH_SERVICE_GROUP), so the access page can suggest it. Display only: what
+// the caller holds is decided by the identity middleware.
+func WithServiceGroup(name string) Option { return func(s *Server) { s.serviceGroup = name } }
 
 // WithAPI mounts the JSON API under apiPrefix. Pass api.New(svc, log); it is
 // taken as an http.Handler so that this package does not depend on that one.

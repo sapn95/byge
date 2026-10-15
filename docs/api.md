@@ -137,9 +137,9 @@ is an allow list and nothing else; there is no deny list.
 
 | Route | Sends | Answers |
 |-------|-------|---------|
-| `GET /b/{board}/access` | | The board's grants, each a principal and its role, with the form that adds one. `403` for anyone but an owner |
-| `POST /b/{board}/access` | `kind` (`user`\|`group`\|`idp`), `id`, `role` (`read`\|`write`\|`owner`) | `303` to the access page. `400` re-renders it with the reason, including a grant to a local group that does not exist, and a change that would leave the board with no owner |
-| `POST /b/{board}/access/delete` | `kind`, `id` | `303` to the access page. Removing the last owner is refused with `400` |
+| `GET /b/{board}/access` | | The board's grants, each but the only owner with a role select and a bin, and one add form per kind with suggestions. `403` for anyone but an owner |
+| `POST /b/{board}/access` | `kind` (`user`\|`group`\|`idp`), `id`, `role` (`read`\|`write`\|`owner`), optional `from=row` | `303` to the access page, to the board when the caller is no longer an owner, or to `/boards` when they can no longer read it. An `id` that already holds a grant has its role replaced. `400` re-renders the page with the reason beside the field, on the grant's row for `from=row`: a user that is not an address (in proxy mode, a login with spaces), an idp group that is not one line of text (in proxy mode, one with a comma), a local group that does not exist, and a change that would leave the board with no owner |
+| `POST /b/{board}/access/delete` | `kind`, `id` | `303`, by the same rule. Removing the last owner is refused with `400` on that row |
 | `POST /b/{board}/claim` | | `303` to the board. Claims an ownerless board for the bootstrap owner. `403` for anyone else, and for a board that already has an owner |
 
 ## Local groups
