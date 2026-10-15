@@ -10,3 +10,10 @@ reviews:
     enabled: true
     base_branches:
       - homelab
+  # A repository under ten stars gets no automatic review on the free plan, and
+  # the included reviews run out besides. CodeRabbit still commented on every
+  # push to say so, and GitHub mailed each of those comments. These two keys
+  # drop the status and progress comments only; a review that does run still
+  # posts its findings.
+  review_status: false
+  review_progress: false
