@@ -35,6 +35,9 @@ const (
 	// MaxComment is a paragraph or two. A comment cannot be edited, so the cap
 	// is also the point at which someone should have written a card instead.
 	MaxComment = 5000
+	// MaxPrincipal is an address or a group name in a grant, the same room an
+	// assignee gets; the access page's add forms use it as their maxlength.
+	MaxPrincipal = 320
 )
 
 // Default board created on an empty database.
@@ -74,6 +77,7 @@ type Byge struct {
 	now            func() time.Time
 	newID          func() model.ID
 	bootstrapOwner string
+	proxyIdentity  bool
 }
 
 // Option configures New.
@@ -87,6 +91,13 @@ func WithIDs(newID func() model.ID) Option { return func(k *Byge) { k.newID = ne
 
 // WithBootstrapOwner sets the AUTH_BOOTSTRAP_OWNER principal; expects the config's lowercased value.
 func WithBootstrapOwner(addr string) Option { return func(k *Byge) { k.bootstrapOwner = addr } }
+
+// WithProxyIdentity tells the grant rules that identity comes from a proxy
+// header (AUTH_MODE=proxy) rather than a verified assertion. A user grant may
+// then name a login such as u236858, and an idp group may not contain a comma,
+// because AUTH_GROUPS_HEADER is one comma-separated list. Off by default, which
+// is the access-mode rule.
+func WithProxyIdentity(on bool) Option { return func(k *Byge) { k.proxyIdentity = on } }
 
 // New wires the service to a store.
 func New(s store.Store, opts ...Option) *Byge {

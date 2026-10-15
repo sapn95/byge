@@ -150,7 +150,8 @@ func openStore(cfg config.Config) (store.Store, error) {
 // serve runs the HTTP server until the context is cancelled, then gives
 // in-flight requests a moment to finish before returning.
 func serve(ctx context.Context, cfg config.Config, st store.Store, log *slog.Logger) int {
-	svc := service.New(st, service.WithBootstrapOwner(cfg.AuthBootstrapOwner))
+	svc := service.New(st, service.WithBootstrapOwner(cfg.AuthBootstrapOwner),
+		service.WithProxyIdentity(cfg.AuthMode == config.AuthProxy))
 	boards, err := svc.EnsureDefaultBoard(ctx)
 	if err != nil {
 		log.Error("prepare default board", "err", err)
@@ -171,7 +172,8 @@ func serve(ctx context.Context, cfg config.Config, st store.Store, log *slog.Log
 	srv := &http.Server{
 		Handler: identityMiddleware(cfg, log)(web.New(svc, st.Ping, log,
 			web.WithBuild(version, commit), web.WithAvatars(cfg.Avatars),
-			web.WithViewers(viewers(cfg)), web.WithAPI(api.New(svc, log)))),
+			web.WithViewers(viewers(cfg)), web.WithServiceGroup(cfg.AuthServiceGroup),
+			web.WithAPI(api.New(svc, log)))),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

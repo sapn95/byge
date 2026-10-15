@@ -353,11 +353,14 @@ func clockValue(m int) string { return model.ClockString(m) }
 // bare "group" the model stores.
 type grantView struct {
 	Grant model.Grant
-	Kind  string
+	Kind  string // human label, kindLabel
+	Name  string // a local group's name when the caller may list groups, else Principal.ID
+	Sole  bool   // the board's only owner grant: no select, no bin
+	Error string // a refused change to this row
 }
 
-// roleOption and kindOption feed the add form's two selects. Value is what the
-// form posts; Label is what the person reads.
+// roleOption feeds the role selects and kindOption the kind labels. Value is
+// what a form posts; Label is what the person reads.
 type roleOption struct {
 	Value model.Role
 	Label string
@@ -368,9 +371,9 @@ type kindOption struct {
 	Label string
 }
 
-// grantRoles and grantKinds are the fixed option lists the add form offers. The
-// values are the model's own, so a crafted body is still the service's to
-// refuse; these only decide what the select draws.
+// grantRoles is the fixed list the role selects offer and grantKinds the
+// labels the kind chips print. The values are the model's own, so a crafted
+// body is still the service's to refuse; these only decide what is drawn.
 var (
 	grantRoles = []roleOption{
 		{model.RoleRead, "read"},
@@ -394,6 +397,19 @@ func kindLabel(k model.PrincipalKind) string {
 	return string(k)
 }
 
+// suggestion is one datalist option. Label is shown beside the value and is
+// empty when there is nothing to add.
+type suggestion struct{ Value, Label string }
+
+// addForm is one of the three add rows, with what a refused post sent.
+type addForm struct {
+	Value   string     // posted id, kept on a refusal
+	Role    model.Role // posted role, kept on a refusal; read otherwise
+	Error   string
+	BadID   bool // Error is about the id field: mark the input invalid
+	BadRole bool // Error is about the role field: mark the role select invalid
+}
+
 type accessPage struct {
 	Title     string
 	User      identity.User
@@ -403,10 +419,18 @@ type accessPage struct {
 	Boards []model.Board
 	Grants []grantView
 	Roles  []roleOption
-	Kinds  []kindOption
-	// Groups is the local groups, for the add form's datalist of group ids.
-	Groups []model.Group
-	Error  string
+	// Groups is the local groups by name, for the group select. Empty when
+	// there are none or the caller may not list them; GroupAdmin says which.
+	Groups        []model.Group
+	GroupAdmin    bool
+	Users         []suggestion // datalist grant-users
+	IDPGroups     []suggestion // datalist grant-idp-groups
+	ProxyIdentity bool         // proxy mode: a user may be a login, an idp group has no comma
+	ServiceGroup  string
+	AddUser       addForm
+	AddGroup      addForm
+	AddIDP        addForm
+	Error         string // a reason not tied to one form
 }
 
 // groupView wraps a group with its member count and a members string joined one
