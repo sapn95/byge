@@ -475,6 +475,19 @@ html.dark { color-scheme: dark; background-color: #020617; }
   width: 100%;
 }
 
+/* A grant's bin sits at the end of its row, and the row is one line: the
+   badge, the address, the role and the Save are a form, and the bin cannot be
+   inside it because a form does not nest in a form. So it is a sibling, and
+   without this it wrapped to a line of its own under the address with the
+   rest of the row empty beside it.
+
+   Open, its question needs the width that a shrink-0 sibling does not have,
+   and unfold-row only widens the details inside this container rather than
+   the container itself. :has() is what reaches up one level. */
+.grant-bin:has(details[open]) {
+  width: 100%;
+}
+
 /* Search results carry the same card face as the board, tick box and all, and
    the multi-select toolbar is only on the board. A box that selects nothing and
    offers nowhere to act reads as a feature that is broken rather than one that

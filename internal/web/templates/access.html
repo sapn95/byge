@@ -23,12 +23,12 @@
 <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Who may use this board</h2>
 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800 mb-3">
   {{range $i, $g := .Grants}}
-  <div class="p-4 flex flex-col gap-3">
+  <div class="grant-row p-4 flex flex-wrap items-center gap-x-4 gap-y-3">
     {{if $g.Sole}}
     <!-- The only owner cannot be demoted or removed, so its row offers
          neither. The service refuses it anyway; this only stops the page
          offering a change that cannot work. -->
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+    <div class="w-full flex flex-wrap items-center gap-x-4 gap-y-3">
       <span class="shrink-0 px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{$g.Kind}}</span>
       <span class="w-full sm:w-auto sm:flex-1 sm:min-w-40 text-sm text-slate-900 dark:text-white break-all">{{$g.Name}}</span>
       <span class="shrink-0 text-sm text-slate-600 dark:text-slate-300">owner</span>
@@ -39,7 +39,7 @@
          same add-or-replace the add forms use, marked as coming from the row
          so a refusal is drawn here. app.js keeps the Save invisible until the
          role changes, as on the settings page. -->
-    <form method="post" action="/b/{{$slug}}/access" class="flex flex-wrap items-center gap-x-4 gap-y-3">
+    <form method="post" action="/b/{{$slug}}/access" class="flex-1 min-w-0 flex flex-wrap items-center gap-x-4 gap-y-3">
       <input type="hidden" name="kind" value="{{$g.Grant.Principal.Kind}}">
       <input type="hidden" name="id" value="{{$g.Grant.Principal.ID}}">
       <input type="hidden" name="from" value="row">
@@ -53,7 +53,7 @@
       <button type="submit" class="row-save shrink-0 px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
     </form>
 
-    <div class="flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+    <div class="grant-bin shrink-0 text-sm text-slate-500 dark:text-slate-400">
       <!-- The bin asks before it does anything, in the page rather than in a
            browser dialog, the same two-step details/summary settings uses. -->
       <details class="unfold unfold-row">
@@ -78,7 +78,7 @@
       </details>
     </div>
     {{end}}
-    {{with $g.Error}}<p id="grant-{{$i}}-error" class="text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
+    {{with $g.Error}}<p id="grant-{{$i}}-error" class="w-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </div>
   {{end}}
 

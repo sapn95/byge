@@ -7,3 +7,7 @@
 
 # Test output
 coverage.out
+
+# git worktree add .worktrees/<name>: a second checkout of this repository,
+# which the Tailwind coverage walk also skips.
+/.worktrees/
