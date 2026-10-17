@@ -78,8 +78,12 @@ func TestEveryFileThatWritesAClassIsCompiled(t *testing.T) {
 		if d.IsDir() {
 			switch rel {
 			// Third-party code brings its own styling and is not scanned;
-			// .tools holds the downloaded compiler.
-			case ".git", ".tools", "assets/vendor":
+			// .tools holds the downloaded compiler. .worktrees is a second
+			// checkout of this same repository: `git worktree add` inside the
+			// tree puts a whole copy of assets/ under it, and without this the
+			// walk reports that copy's app.js as uncovered and fails for
+			// everybody who keeps a branch checked out that way.
+			case ".git", ".tools", ".worktrees", "assets/vendor":
 				return filepath.SkipDir
 			}
 			return nil
