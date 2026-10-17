@@ -9,8 +9,17 @@
        be added to a home screen and run without its chrome; Safari reads none of
        it and wants the three lines below instead, including a PNG, because it
        has never taken an SVG for a touch icon. The colour is the page's own
-       ground, so the status bar and the splash match what opens behind them. -->
-  <link rel="manifest" href="/manifest.webmanifest">
+       ground, so the status bar and the splash match what opens behind them.
+
+       crossorigin="use-credentials" because a manifest is fetched with
+       credentials omitted by default, and this board sits behind a sign-in.
+       Without it the request arrives at Cloudflare Access with no cookie,
+       Access answers 302 to its own login on another origin, the manifest
+       never parses, and the browser offers no install at all: no name, no
+       icons, no prompt, and no error anywhere a user would look. The same
+       attribute carries the cookie into the icon fetches the manifest starts.
+       It costs nothing on a board with no sign-in in front of it. -->
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
   <meta name="theme-color" content="#020617">
   <link rel="apple-touch-icon" href="{{asset "icon-180.png"}}">
   <meta name="mobile-web-app-capable" content="yes">

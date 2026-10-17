@@ -109,3 +109,21 @@ func TestDirectModulesMatchGoMod(t *testing.T) {
 		t.Errorf("directModules = %v, go.mod requires %v", got, want)
 	}
 }
+
+// The manifest link carries credentials, or the board is not installable
+// behind a sign-in.
+//
+// A manifest is fetched with credentials omitted unless the link says
+// otherwise. With Cloudflare Access in front, that request arrives with no
+// cookie, Access answers 302 to its login on another origin, and the manifest
+// never parses: no install prompt, no name, no icons, and nothing in the page
+// or the console that points at the cause. Measured against the deployed
+// board, where /manifest.webmanifest answers 302 to
+// sapn-homelab.cloudflareaccess.com without the cookie.
+func TestManifestLinkSendsCredentials(t *testing.T) {
+	body := newEnv(t, nil, nil).do(http.MethodGet, "/about", nil).Body.String()
+	const want = `<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">`
+	if !strings.Contains(body, want) {
+		t.Errorf("the layout does not carry\n\t%s", want)
+	}
+}

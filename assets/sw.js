@@ -19,8 +19,15 @@ self.addEventListener('install', (e) => {
   // along with the worker that would have cleaned up after it, so a board
   // whose offline page answered 403 left an empty cache behind on every
   // attempt.
+  //
+  // redirect: 'error' because a sign-in in front of the board answers a
+  // request it cannot place with a redirect to its own login on another
+  // origin. Followed, that is either a cross-origin failure or, worse, a
+  // login page cached under the name of the offline page and served to
+  // whoever opens the board next. A redirect here is not the offline page,
+  // so the install fails and is retried rather than keeping the wrong bytes.
   e.waitUntil(
-    fetch(OFFLINE)
+    fetch(OFFLINE, { redirect: 'error' })
       .then((res) => {
         if (!res.ok) { throw new Error('offline page: ' + res.status); }
         return caches.open(SHELL).then((c) => c.put(OFFLINE, res));
