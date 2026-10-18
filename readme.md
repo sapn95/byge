@@ -33,16 +33,21 @@ Database: SQLite or PostgreSQL. SQLite is a file, needs nothing installed, and i
   rename, reorder, set a limit, and choose where a deleted column's cards go.
   A board is deleted from the board list, by typing its name: it takes its
   cards, columns, labels and comments with it, and nothing brings those back.
-- Cards with description, due date, labels and a subtask checklist. The card
-  face shows checklist progress, and grades a due date rather than only
-  marking it late. A double click opens the card for editing, and a double
+- Cards with description, due date, labels and a subtask checklist. A
+  checklist line is a box that grows with what is written in it, so a line may
+  be a sentence over several lines rather than something that scrolls sideways.
+  The card face shows checklist progress, and grades a due date rather than
+  only marking it late. A double click opens the card for editing, and a double
   click on the date itself opens the browser's own calendar instead, so a date
   moves without opening anything.
 - The description is markdown, rendered by the server: bold, italic, lists,
   quotes, headings, `code`, fenced blocks and links. It is a documented subset
   and no dependency, and a link is only a link if its scheme is one of four;
   see [docs/adr/0010](docs/adr/0010-markdown-descriptions.md).
-- Assignee per card, shown on the card face, with one click to take it yourself.
+- Assignee per card, shown on the card face, with one click to take it
+  yourself. The box that asks for an address suggests the people on
+  `AUTH_VIEWERS`, so assigning somebody who has never had a card here is two
+  letters and a pick rather than their whole address.
   With `AVATARS` set, the bubble shows the person's GitHub picture, fetched by
   the server and served from your own origin so that GitHub never sees who is
   looking at the board; see [docs/adr/0008](docs/adr/0008-avatars-are-proxied.md).
@@ -136,13 +141,13 @@ The image is built for linux/amd64 and linux/arm64 with a provenance
 attestation, so it runs on a laptop and on a Raspberry Pi from the same tag.
 
 ``` bash
-docker pull ghcr.io/sapn95/byge:2.20.0
+docker pull ghcr.io/sapn95/byge:2.21.0
 
 # SQLite: one volume, no database to set up
-docker run -p 17808:17808 -e STORAGE=sqlite -v kanban:/data ghcr.io/sapn95/byge:2.20.0
+docker run -p 17808:17808 -e STORAGE=sqlite -v kanban:/data ghcr.io/sapn95/byge:2.21.0
 
 # PostgreSQL
-docker run -p 17808:17808 -e DB_HOST=your-postgres -e DB_USER=... -e DB_PASS=... ghcr.io/sapn95/byge:2.20.0
+docker run -p 17808:17808 -e DB_HOST=your-postgres -e DB_USER=... -e DB_PASS=... ghcr.io/sapn95/byge:2.21.0
 ```
 
 ### On Unraid
@@ -235,7 +240,8 @@ sign-in knows who is at the keyboard and nothing about who else was let in, so
 the list is written down here and drawn in the app bar beside your own name. It
 decides nothing: the sign-in admits whoever it admits, and a roster that has
 drifted from it makes the page wrong rather than the board looser. One address
-per person, because it is read by people.
+per person, because it is read by people. It is also what an assignee box
+offers as suggestions, which is the second reason to keep it current.
 
 `AUTH_MODE` says how a caller is recognised. It does not say that a caller has
 to be anybody: a request that arrives without the header or the assertion is
@@ -366,7 +372,7 @@ With a target set, the server writes the same document on a timer and prunes to
 ``` bash
 docker run -p 17808:17808 -v kanban:/data \
   -e STORAGE=sqlite -e BACKUP_DIR=/data/snapshots -e BACKUP_INTERVAL=6h \
-  ghcr.io/sapn95/byge:2.20.0
+  ghcr.io/sapn95/byge:2.21.0
 ```
 
 For a bucket, set `BACKUP_S3_BUCKET`, a region and the two AWS keys;
