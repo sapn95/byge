@@ -3924,8 +3924,13 @@ func TestAssigneeSuggestions(t *testing.T) {
 				t.Errorf("the board page has no %q", want)
 			}
 		}
-		if n := strings.Count(body, `list="people"`); n == 0 {
-			t.Error("no box on the board offers the list")
+		// Every box that asks for an address, not just the first one: the
+		// quick menu draws one per card and the add-card modal one more, and
+		// they are two different templates that drifted apart once already.
+		boxes := strings.Count(body, `type="email" name="assignee"`)
+		lists := strings.Count(body, `list="people"`)
+		if boxes == 0 || boxes != lists {
+			t.Errorf("%d boxes ask for an address and %d offer the list", boxes, lists)
 		}
 		// The modal is a fragment swapped into this page: it points at the
 		// page's list rather than carrying one, which is why there is no
@@ -3942,12 +3947,21 @@ func TestAssigneeSuggestions(t *testing.T) {
 	// The list is the roster under another name, so it is behind the same
 	// gate: a caller the board could not identify does not get a list of
 	// people's addresses.
-	t.Run("nobody signed in, no list", func(t *testing.T) {
+	// The list is a list of people's addresses, so a caller the board could
+	// not identify must not be handed one. What stops that is the board page
+	// itself, which is refused outright: no grant reaches an anonymous
+	// caller. The {{if .User.Email}} around the list is the second lock, kept
+	// for the same reason the roster in the app bar has one, and it is this
+	// 403 that makes it unreachable rather than untested.
+	t.Run("nobody signed in, no page and no list", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
 		e.user = ""
-		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
+		rr := e.do(http.MethodGet, "/b/demo", nil)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403 for a caller the board cannot identify", rr.Code)
+		}
 		for _, leaked := range []string{"<datalist", "ada@example.com"} {
-			if strings.Contains(body, leaked) {
+			if strings.Contains(rr.Body.String(), leaked) {
 				t.Errorf("an unidentified caller was shown %q", leaked)
 			}
 		}
