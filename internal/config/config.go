@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Config is the effective configuration of one kanban process.
+// Config is the effective configuration of one byge process.
 //
 // The `env` tag names the variable a field is read from. It is what Settings
 // walks for `byge doctor`, so a field without one is a field the doctor does

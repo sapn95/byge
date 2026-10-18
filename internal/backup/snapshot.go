@@ -310,7 +310,7 @@ func Read(r io.Reader) (*Snapshot, error) {
 	}
 	switch {
 	case snap.Format == 0:
-		return nil, fmt.Errorf("%w: no format field; this is not a kanban snapshot", ErrFormat)
+		return nil, fmt.Errorf("%w: no format field; this is not a byge snapshot", ErrFormat)
 	case snap.Format > Format:
 		return nil, fmt.Errorf("%w: file is format %d, this build reads up to %d", ErrFormat, snap.Format, Format)
 	}

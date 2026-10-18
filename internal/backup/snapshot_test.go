@@ -272,7 +272,7 @@ func TestEmptyStoreExports(t *testing.T) {
 func TestReadRefusesWhatItCannotImport(t *testing.T) {
 	for _, tc := range []struct{ name, body, want string }{
 		{"not json", "{", "decode snapshot"},
-		{"not a snapshot", `{"hello": "world"}`, "not a kanban snapshot"},
+		{"not a snapshot", `{"hello": "world"}`, "not a byge snapshot"},
 		{"from the future", `{"format": 99, "boards": []}`, "this build reads up to 1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

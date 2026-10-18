@@ -16,9 +16,8 @@
        Without it the request arrives at Cloudflare Access with no cookie,
        Access answers 302 to its own login on another origin, the manifest
        never parses, and the browser offers no install at all: no name, no
-       icons, no prompt, and no error anywhere a user would look. The same
-       attribute carries the cookie into the icon fetches the manifest starts.
-       It costs nothing on a board with no sign-in in front of it. -->
+       icons, no prompt, and no error anywhere a user would look. It costs
+       nothing on a board with no sign-in in front of it. -->
   <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
   <meta name="theme-color" content="#020617">
   <link rel="apple-touch-icon" href="{{asset "icon-180.png"}}">
