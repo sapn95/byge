@@ -475,17 +475,107 @@ html.dark { color-scheme: dark; background-color: #020617; }
   width: 100%;
 }
 
-/* A grant's bin sits at the end of its row, and the row is one line: the
-   badge, the address, the role and the Save are a form, and the bin cannot be
-   inside it because a form does not nest in a form. So it is a sibling, and
-   without this it wrapped to a line of its own under the address with the
-   rest of the row empty beside it.
+/* The cells of a settings-style card.
+ *
+ * Four cards are built the same way: the grants on the access page, the
+ * columns and the labels on the settings page, and the local groups. Each is
+ * a stack of rows, each row ends in an add form, and each row is a name, some
+ * controls, a button and usually a bin. They were six independent flex lines
+ * before, every one sizing its own fields: an add form pinned its name field
+ * to a fixed width while the rows above let theirs grow, so the button below
+ * never stood under the buttons above, and on the access page nothing lined
+ * up with anything. The classes here are the shared answer, so a new card
+ * states which cell each control is rather than inventing widths again.
+ *
+ * A row is one line, or a form that is the line. A grant row cannot be one
+ * line by itself: its badge, address, role and Save are a form, and the bin
+ * is a second form, which cannot nest inside the first. So .card-cells is the
+ * row's one growing item and carries the cells, and a row with no bin ends in
+ * an empty .cell-bin. Both shapes then leave the growing cell the same width,
+ * the row less the fixed cells and the gaps, which is why column-gap is set
+ * here for the row and the form together rather than per element.
+ *
+ * Below 640px, Tailwind's sm, a row stacks and none of the widths apply: a
+ * 96px badge beside a field does not fit a phone. The second line of a
+ * two-line row keeps its own tight spacing and is not one of these; only its
+ * count and its bin take a cell width, which is what puts the arrows and the
+ * bins under each other down the card. */
+.card-row,
+.card-cells {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
 
-   Open, its question needs the width that a shrink-0 sibling does not have,
-   and unfold-row only widens the details inside this container rather than
-   the container itself. :has() is what reaches up one level. */
-.grant-bin:has(details[open]) {
+/* Stacked, both the form and the cell inside it take the row. Without the
+   width on the form it is a flex item with no size of its own, so it grows to
+   its longest unbroken content, which on the access page is an address of
+   fifty characters: the card then ran off the side of the phone and took the
+   add forms with it. */
+.card-cells,
+.cell-grow {
   width: 100%;
+}
+
+@media (min-width: 640px) {
+  .card-row,
+  .card-cells {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1rem;
+    row-gap: 0.75rem;
+  }
+
+  .card-cells,
+  .cell-grow {
+    width: auto;
+    flex: 1 1 0%;
+    min-width: 0;
+  }
+
+  /* The label row's colours are one list and may not be broken over two
+     lines; the name field gives up the width instead, which it can because
+     the growing cell has no floor. */
+  .card-row-nowrap {
+    flex-wrap: nowrap;
+  }
+
+  /* A row whose growing cell is a textarea: centring a one-line field against
+     a three-line one puts the name halfway down the box beside it. */
+  .card-row-top {
+    align-items: flex-start;
+  }
+
+  .cell-tag {
+    width: 6rem;
+    flex: none;
+  }
+
+  .cell-choice {
+    width: 7rem;
+    flex: none;
+  }
+
+  .cell-action,
+  .cell-count {
+    width: 6rem;
+    flex: none;
+  }
+
+  .cell-move,
+  .cell-bin {
+    width: 2.25rem;
+    flex: none;
+  }
+
+  /* Open, the bin's question needs the width a fixed cell does not have, and
+     unfold-row only widens the details inside this cell rather than the cell
+     itself. :has() is what reaches up the one level. */
+  .cell-bin:has(details[open]) {
+    width: 100%;
+  }
 }
 
 /* Search results carry the same card face as the board, tick box and all, and

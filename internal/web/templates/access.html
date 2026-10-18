@@ -20,40 +20,47 @@
 
 {{$slug := .BoardSlug}}
 
+<!-- Every row of this card carries the same five cells, in the same order:
+     kind, principal, role, button, bin. The widths are in app.css under
+     .card-row, because the grant rows and the add forms are differently
+     shaped and only a shared rule keeps them on one grid. A row with no bin
+     ends in an empty cell of the bin's width so the four before it still land
+     where the others do. -->
 <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Who may use this board</h2>
 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none divide-y divide-slate-100 dark:divide-slate-800 mb-3">
   {{range $i, $g := .Grants}}
-  <div class="grant-row p-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+  <div class="card-row p-4">
     {{if $g.Sole}}
     <!-- The only owner cannot be demoted or removed, so its row offers
          neither. The service refuses it anyway; this only stops the page
          offering a change that cannot work. -->
-    <div class="w-full flex flex-wrap items-center gap-x-4 gap-y-3">
-      <span class="shrink-0 px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{$g.Kind}}</span>
-      <span class="w-full sm:w-auto sm:flex-1 sm:min-w-40 text-sm text-slate-900 dark:text-white break-all">{{$g.Name}}</span>
-      <span class="shrink-0 text-sm text-slate-600 dark:text-slate-300">owner</span>
-      <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">the only owner</span>
+    <div class="card-cells">
+      <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{$g.Kind}}</span>
+      <span class="cell-grow text-sm text-slate-900 dark:text-white break-all">{{$g.Name}}</span>
+      <span class="cell-choice text-sm text-slate-600 dark:text-slate-300">owner</span>
+      <span class="cell-action text-xs text-slate-500 dark:text-slate-400">only owner</span>
     </div>
+    <span class="cell-bin" aria-hidden="true"></span>
     {{else}}
     <!-- The row is its own form: changing the role and saving it posts the
          same add-or-replace the add forms use, marked as coming from the row
          so a refusal is drawn here. app.js keeps the Save invisible until the
          role changes, as on the settings page. -->
-    <form method="post" action="/b/{{$slug}}/access" class="flex-1 min-w-0 flex flex-wrap items-center gap-x-4 gap-y-3">
+    <form method="post" action="/b/{{$slug}}/access" class="card-cells">
       <input type="hidden" name="kind" value="{{$g.Grant.Principal.Kind}}">
       <input type="hidden" name="id" value="{{$g.Grant.Principal.ID}}">
       <input type="hidden" name="from" value="row">
-      <span class="shrink-0 px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{$g.Kind}}</span>
-      <span class="w-full sm:w-auto sm:flex-1 sm:min-w-40 text-sm text-slate-900 dark:text-white break-all">{{$g.Name}}</span>
+      <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{$g.Kind}}</span>
+      <span class="cell-grow text-sm text-slate-900 dark:text-white break-all">{{$g.Name}}</span>
       <select name="role" aria-label="Role of {{$g.Name}}"
         {{if $g.Error}}aria-invalid="true" aria-describedby="grant-{{$i}}-error"{{end}}
-        class="shrink-0 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+        class="cell-choice px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
         {{range $.Roles}}<option value="{{.Value}}"{{if eq .Value $g.Grant.Role}} selected{{end}}>{{.Label}}</option>{{end}}
       </select>
-      <button type="submit" class="row-save shrink-0 px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
+      <button type="submit" class="row-save cell-action px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
     </form>
 
-    <div class="grant-bin shrink-0 text-sm text-slate-500 dark:text-slate-400">
+    <div class="cell-bin text-sm text-slate-500 dark:text-slate-400">
       <!-- The bin asks before it does anything, in the page rather than in a
            browser dialog, the same two-step details/summary settings uses. -->
       <details class="unfold unfold-row">
@@ -85,91 +92,95 @@
   <!-- One add form per kind rather than one form with a kind select: each
        kind wants its own field, its own suggestions and its own checks, and
        switching them with a select would take a script. -->
-  <form method="post" action="/b/{{$slug}}/access" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <form method="post" action="/b/{{$slug}}/access" class="card-row p-4">
     <input type="hidden" name="kind" value="user">
-    <span class="shrink-0 w-24 text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">user</span>
+    <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">user</span>
     <input type="text" name="id" value="{{.AddUser.Value}}" required maxlength="320" list="grant-users"
       autocapitalize="none" spellcheck="false" aria-label="User address"
       {{if .ProxyIdentity}}pattern="\s*\S+\s*" placeholder="address or login" title="An address or login, without spaces"
       {{else}}inputmode="email" pattern="\s*[^\s@]+@[^\s@]+\s*" placeholder="ada@example.com" title="An address such as ada@example.com"{{end}}
       {{if .AddUser.BadID}}aria-invalid="true" aria-describedby="add-user-error"{{end}}
-      class="w-full px-3 py-2 border {{if .AddUser.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+      class="cell-grow px-3 py-2 border {{if .AddUser.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
     <datalist id="grant-users">{{range .Users}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</datalist>
     <select name="role" aria-label="Role for the new user"
       {{if .AddUser.BadRole}}aria-invalid="true" aria-describedby="add-user-error"{{end}}
-      class="{{if .AddUser.BadRole}}px-2 py-2 border border-rose-300 dark:border-rose-500/40 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{else}}px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{end}}">
+      class="cell-choice px-2 py-2 border {{if .AddUser.BadRole}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       {{range .Roles}}<option value="{{.Value}}"{{if eq .Value $.AddUser.Role}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
-    <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+    <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
       <i class="bi bi-plus mr-1"></i>Add
     </button>
+    <span class="cell-bin" aria-hidden="true"></span>
     {{with .AddUser.Error}}<p id="add-user-error" class="basis-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </form>
 
   {{if and .GroupAdmin .Groups}}
-  <form method="post" action="/b/{{$slug}}/access" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <form method="post" action="/b/{{$slug}}/access" class="card-row p-4">
     <input type="hidden" name="kind" value="group">
-    <span class="shrink-0 w-24 text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
+    <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
     <select name="id" required aria-label="Local group"
       {{if .AddGroup.BadID}}aria-invalid="true" aria-describedby="add-group-error"{{end}}
-      class="w-full px-3 py-2 border {{if .AddGroup.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+      class="cell-grow px-3 py-2 border {{if .AddGroup.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       <option value="">pick a group</option>
       {{range .Groups}}<option value="{{.ID}}"{{if eq .ID $.AddGroup.Value}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
     <select name="role" aria-label="Role for the new local group"
       {{if .AddGroup.BadRole}}aria-invalid="true" aria-describedby="add-group-error"{{end}}
-      class="{{if .AddGroup.BadRole}}px-2 py-2 border border-rose-300 dark:border-rose-500/40 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{else}}px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{end}}">
+      class="cell-choice px-2 py-2 border {{if .AddGroup.BadRole}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       {{range .Roles}}<option value="{{.Value}}"{{if eq .Value $.AddGroup.Role}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
-    <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+    <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
       <i class="bi bi-plus mr-1"></i>Add
     </button>
+    <span class="cell-bin" aria-hidden="true"></span>
     {{with .AddGroup.Error}}<p id="add-group-error" class="basis-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </form>
   {{else if .GroupAdmin}}
-  <div class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center text-sm text-slate-500 dark:text-slate-400">
-    <span class="shrink-0 w-24 text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
-    <span>No local groups yet. <a href="/groups" class="underline">Make one on the groups page</a>.</span>
+  <div class="card-row p-4 text-sm text-slate-500 dark:text-slate-400">
+    <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
+    <span class="cell-grow">No local groups yet. <a href="/groups" class="underline">Make one on the groups page</a>.</span>
     {{with .AddGroup.Error}}<p id="add-group-error" class="basis-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </div>
   {{else}}
-  <form method="post" action="/b/{{$slug}}/access" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <form method="post" action="/b/{{$slug}}/access" class="card-row p-4">
     <input type="hidden" name="kind" value="group">
-    <span class="shrink-0 w-24 text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
+    <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">local group</span>
     <input type="text" name="id" value="{{.AddGroup.Value}}" required maxlength="320"
       placeholder="local group id" aria-label="Local group id" autocapitalize="none" spellcheck="false"
       {{if .AddGroup.BadID}}aria-invalid="true" aria-describedby="add-group-error"{{end}}
-      class="w-full px-3 py-2 border {{if .AddGroup.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+      class="cell-grow px-3 py-2 border {{if .AddGroup.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
     <select name="role" aria-label="Role for the new local group"
       {{if .AddGroup.BadRole}}aria-invalid="true" aria-describedby="add-group-error"{{end}}
-      class="{{if .AddGroup.BadRole}}px-2 py-2 border border-rose-300 dark:border-rose-500/40 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{else}}px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{end}}">
+      class="cell-choice px-2 py-2 border {{if .AddGroup.BadRole}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       {{range .Roles}}<option value="{{.Value}}"{{if eq .Value $.AddGroup.Role}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
-    <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+    <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
       <i class="bi bi-plus mr-1"></i>Add
     </button>
+    <span class="cell-bin" aria-hidden="true"></span>
     <p class="basis-full text-xs text-slate-500 dark:text-slate-400">Local groups are listed for the instance owner only. Ask them for the id of the group you want.</p>
     {{with .AddGroup.Error}}<p id="add-group-error" class="basis-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </form>
   {{end}}
 
-  <form method="post" action="/b/{{$slug}}/access" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <form method="post" action="/b/{{$slug}}/access" class="card-row p-4">
     <input type="hidden" name="kind" value="idp">
-    <span class="shrink-0 w-24 text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">idp group</span>
+    <span class="cell-tag text-center px-2 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">idp group</span>
     <input type="text" name="id" value="{{.AddIDP.Value}}" required maxlength="320" list="grant-idp-groups"
       {{if .ProxyIdentity}}pattern="[^,]+" title="A group name as your proxy sends it, without commas"{{end}}
       placeholder="{{or .ServiceGroup "group name"}}" spellcheck="false" aria-label="Identity provider group name"
       {{if .AddIDP.BadID}}aria-invalid="true" aria-describedby="add-idp-error"{{end}}
-      class="w-full px-3 py-2 border {{if .AddIDP.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+      class="cell-grow px-3 py-2 border {{if .AddIDP.BadID}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
     <datalist id="grant-idp-groups">{{range .IDPGroups}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</datalist>
     <select name="role" aria-label="Role for the new idp group"
       {{if .AddIDP.BadRole}}aria-invalid="true" aria-describedby="add-idp-error"{{end}}
-      class="{{if .AddIDP.BadRole}}px-2 py-2 border border-rose-300 dark:border-rose-500/40 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{else}}px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm{{end}}">
+      class="cell-choice px-2 py-2 border {{if .AddIDP.BadRole}}border-rose-300 dark:border-rose-500/40{{else}}border-slate-300 dark:border-slate-600{{end}} rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       {{range .Roles}}<option value="{{.Value}}"{{if eq .Value $.AddIDP.Role}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
-    <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+    <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
       <i class="bi bi-plus mr-1"></i>Add
     </button>
+    <span class="cell-bin" aria-hidden="true"></span>
     {{with .AddIDP.Error}}<p id="add-idp-error" class="basis-full text-xs text-rose-700 dark:text-rose-300" role="alert">{{.}}</p>{{end}}
   </form>
 </div>
