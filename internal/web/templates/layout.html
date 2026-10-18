@@ -86,25 +86,21 @@
     {{else}}
     <h1 class="min-w-0 flex-1 truncate text-base sm:text-lg font-semibold tracking-tight">{{.Title}}</h1>
     {{end}}
-    {{$viewers := viewers}}
     {{if .User.Email}}
-    <!-- Who you are, and who else can read this. Both were questions the board
-         could not answer: the name was a label on a wide screen and nothing at
-         all on a phone, and "who can see this" lived in a Cloudflare dashboard.
-         details/summary again, so a second popover costs no script.
-         Behind .User.Email on purpose: the roster is a list of people's
-         addresses and an anonymous reader has no business with it. That is a
-         real gate in access mode, where an address means a verified assertion.
-         In proxy mode it is only as good as the header, which anything that can
-         reach the port can set, so a deployment that publishes the port beside
-         its proxy needs AUTH_REQUIRED whether or not it sets a roster. The
-         config refuses the two settings that cannot work; this one it cannot
-         see, which is why it is written here. -->
+    <!-- Who you are, and who else may open this board. Both were questions the
+         board could not answer: the name was a label on a wide screen and
+         nothing at all on a phone, and "who can see this" lived in a
+         Cloudflare dashboard. details/summary again, so a second popover costs
+         no script.
+         The list is the board's own grants, filled only for an owner, because
+         that is who may be told. It used to be the AUTH_VIEWERS roster, which
+         is a deployment-wide list of names: once the board started enforcing
+         grants, that panel was naming people this board refuses. -->
     <details class="unfold unfold-pop relative shrink-0">
       <summary class="flex items-center gap-2 cursor-pointer rounded-lg px-1 py-1 text-sm
                       text-slate-600 dark:text-slate-300
                       hover:bg-slate-200 dark:hover:bg-slate-800"
-               title="Who can see this board">
+               title="Who can open this board">
         <span class="relative inline-flex items-center justify-center w-7 h-7 shrink-0 overflow-hidden rounded-full
                      bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-xs font-semibold uppercase">
           {{.User.Initials}}
@@ -122,32 +118,33 @@
           <div class="text-sm font-semibold truncate">{{.User.Display}}</div>
           <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{.User.Email}}</div>
         </div>
-        {{if $viewers}}
+        {{with .Readers}}
         <div class="px-3 pt-2.5 pb-1 text-xs font-semibold uppercase tracking-wide
-                    text-slate-400 dark:text-slate-500">Who can see this board</div>
+                    text-slate-400 dark:text-slate-500">Who can open this board</div>
         <ul class="pb-1 max-h-64 overflow-y-auto">
-          {{range $viewers}}
+          {{range .}}
           <li class="flex items-center gap-2.5 px-3 py-1.5">
             <span class="relative inline-flex items-center justify-center w-6 h-6 shrink-0 overflow-hidden rounded-full
                          bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-[10px] font-semibold uppercase">
-              {{.Initials}}
+              {{if .Email}}{{initials .Email}}{{else}}<i class="bi bi-people text-xs"></i>{{end}}
               {{with avatar .Email}}
               <img src="{{.}}" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover">
               {{end}}
             </span>
-            <span class="min-w-0">
-              <span class="block text-sm truncate">{{.Display}}</span>
-              <span class="block text-xs text-slate-500 dark:text-slate-400 truncate">{{.Email}}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm truncate">{{.Name}}</span>
+              <span class="block text-xs text-slate-500 dark:text-slate-400 truncate">{{if .Email}}{{.Email}}{{else}}{{.Kind}}{{end}}</span>
             </span>
+            <span class="shrink-0 text-xs text-slate-400 dark:text-slate-500">{{.Role}}</span>
           </li>
           {{end}}
         </ul>
-        <!-- Said plainly, because a list on a page looks like a setting. This
-             one is a copy: changing who gets in happens where the sign-in is. -->
+        <!-- Said plainly, because a list on a page looks like a setting. It is
+             one, and this says where it is changed. -->
         <p class="px-3 py-2 border-t border-slate-100 dark:border-slate-800
                   text-xs text-slate-500 dark:text-slate-400">
-          The sign-in in front of this board decides who gets in. This is what it
-          was last told to allow.
+          Everybody else is refused, whatever the sign-in in front of the board
+          admits. Change it on the <a class="underline" href="/b/{{$.BoardSlug}}/access">access page</a>.
         </p>
         {{end}}
       </div>

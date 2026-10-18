@@ -66,12 +66,15 @@ func WithAvatars(logins map[string]string) Option {
 	return func(s *Server) { s.avatars = newAvatars(logins) }
 }
 
-// WithViewers tells the board who may see it, so the app bar can say so.
+// WithViewers names the people this deployment knows: their addresses and
+// what to call them.
 //
-// The list is not consulted for anything. What decides who gets in is the
-// sign-in in front of the board, and this is a copy of that decision written
-// where the people it concerns will read it. Passing a copy that has drifted
-// makes the page wrong and changes nothing about who is let in.
+// It admits nobody and it is not an access list. It gives an address a name
+// where one is printed, and it is what an assignee box offers as suggestions,
+// so somebody who has never had a card here can still be picked in two
+// letters. Who may open a board is that board's own grants, which is what the
+// app-bar panel draws; this roster used to be drawn there and was naming
+// people the board refuses.
 func WithViewers(people []identity.User) Option {
 	return func(s *Server) { s.viewers = people }
 }
