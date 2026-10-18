@@ -1,7 +1,7 @@
-// Command kanban runs the board. With no arguments it serves HTTP, so the
+// Command byge runs the board. With no arguments it serves HTTP, so the
 // Docker CMD and existing deployments keep working.
 //
-//	kanban [serve]    run the HTTP server
+//	byge [serve]    run the HTTP server
 //	byge migrate    apply pending schema migrations and exit
 //	byge export     write a snapshot of every board as JSON
 //	byge import     read a snapshot back in
@@ -61,7 +61,7 @@ func main() {
 
 // usage prints the commands and the flags.
 func usage(w io.Writer) {
-	_, _ = io.WriteString(w, `usage: kanban [serve|migrate|export|import|doctor|version|help]
+	_, _ = io.WriteString(w, `usage: byge [serve|migrate|export|import|doctor|version|help]
   serve                     run the HTTP server (default)
   migrate                   apply pending schema migrations and exit
   export [-o file]          write a snapshot of every board to stdout or a file

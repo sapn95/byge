@@ -42,7 +42,11 @@ func TestVersionHelpUnknown(t *testing.T) {
 		t.Fatalf("version: %d %q", code, out.String())
 	}
 	out.Reset()
-	if code := run(context.Background(), []string{"--help"}, env(nil), &out, &errOut); code != 0 || !strings.Contains(out.String(), "usage:") {
+	// The name, not only the word: the help is the one place the program says
+	// what to type, and a rename that misses it leaves the board telling people
+	// to run a command that no longer exists. This one said "usage: kanban"
+	// from the rename until 2.19.0, because the test asked for "usage:" alone.
+	if code := run(context.Background(), []string{"--help"}, env(nil), &out, &errOut); code != 0 || !strings.Contains(out.String(), "usage: byge ") {
 		t.Fatalf("help: %d %q", code, out.String())
 	}
 	if code := run(context.Background(), []string{"frobnicate"}, env(nil), &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "unknown command") {
