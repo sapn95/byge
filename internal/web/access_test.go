@@ -385,3 +385,49 @@ func TestAccessPageInProxyMode(t *testing.T) {
 	want(t, e.do(http.MethodPost, "/b/demo/access", form("kind", "idp", "id", "platform, ops", "role", "read")),
 		http.StatusBadRequest, "cannot contain a comma", `aria-describedby="add-idp-error"`)
 }
+
+// Every row of a settings-style card stands on the same cells, so a control
+// on one row is under the same control on the row above it.
+//
+// The widths live in app.css; what a template owes is one cell per control
+// and an empty cell where a row has no control to put there. A row that
+// simply leaves a cell out is how this broke before: the add forms sized
+// their own field, so the Add stood nowhere near the Saves above it, and on a
+// column row the first and the last have one arrow fewer than the middle,
+// which walked the bin 33px to the left on those two rows.
+//
+// Counting is the whole test. A cell that is not rendered is a cell that is
+// not counted, and that is exactly the defect.
+func TestCardRowsStandOnTheSameCells(t *testing.T) {
+	t.Run("a grant row reserves the bin its neighbours have", func(t *testing.T) {
+		e := seeded(t)
+		// A second grant, so the card holds a row that can be removed as well
+		// as the sole owner's, which cannot.
+		want(t, e.do(http.MethodPost, "/b/demo/access", form("kind", "user", "id", "ada@example.com", "role", "read")),
+			http.StatusSeeOther)
+		body := e.do(http.MethodGet, "/b/demo/access", nil).Body.String()
+		actions := strings.Count(body, "cell-action")
+		bins := strings.Count(body, "cell-bin")
+		if actions < 4 {
+			t.Fatalf("the card drew %d rows carrying a button, so this asserts nothing", actions)
+		}
+		if bins != actions {
+			t.Errorf("%d rows end in a button and %d in a bin cell: the row that is short one "+
+				"puts its button in a column of its own", actions, bins)
+		}
+	})
+
+	t.Run("a column row reserves both move arrows", func(t *testing.T) {
+		e := seeded(t)
+		body := e.do(http.MethodGet, "/b/demo/settings", nil).Body.String()
+		columns := strings.Count(body, `aria-label="Column name"`)
+		moves := strings.Count(body, "cell-move")
+		if columns < 2 {
+			t.Fatalf("the settings page drew %d columns, so this asserts nothing", columns)
+		}
+		if moves != 2*columns {
+			t.Errorf("%d column rows and %d arrow cells, want %d: the first and the last column "+
+				"have one arrow fewer and the bin moves with it", columns, moves, 2*columns)
+		}
+	})
+}

@@ -76,9 +76,9 @@
        utility name in a comment compiles a rule nothing uses. -->
   <div class="p-4 flex flex-col gap-3">
     <form method="post" action="/b/{{$slug}}/columns/{{.Column.ID}}"
-      class="flex flex-wrap items-center gap-x-4 gap-y-3">
+      class="card-row">
       <input type="text" name="name" value="{{.Column.Name}}" required maxlength="100" aria-label="Column name"
-        class="w-full sm:w-auto sm:flex-1 sm:min-w-40 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+        class="cell-grow px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 shrink-0">
         WIP limit
         <input type="number" name="wip_limit" min="0" step="1" placeholder="none"
@@ -99,30 +99,39 @@
            than removed so the space stays reserved and nothing else moves into
            it. It is rendered visible, so a browser running no script has the
            button it needs. -->
-      <button type="submit" class="row-save shrink-0 px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
+      <button type="submit" class="row-save cell-action px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
     </form>
 
     <div class="flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-      <span class="shrink-0 tabular-nums mr-2">
+      <span class="cell-count tabular-nums">
         {{if .Cards}}{{.Cards}} card{{if ne .Cards 1}}s{{end}}{{else}}empty{{end}}
       </span>
+      <!-- The first column cannot move left and the last cannot move right, so
+           one row of three has an arrow the others do not. Rendered as a gap
+           that is simply missing, the bin behind it stood 33px further left on
+           that row than on the two above it. An empty cell of the same width
+           keeps every row's arrows and bin under each other. -->
       {{if not .First}}
-      <form method="post" action="/b/{{$slug}}/columns/{{.Column.ID}}/move" class="shrink-0">
+      <form method="post" action="/b/{{$slug}}/columns/{{.Column.ID}}/move" class="cell-move">
         <input type="hidden" name="to" value="{{.Prev}}">
         <button type="submit" title="Move left" aria-label="Move left"
           class="p-2 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
           <i class="bi bi-arrow-left-short text-lg"></i>
         </button>
       </form>
+      {{else}}
+      <span class="cell-move" aria-hidden="true"></span>
       {{end}}
       {{if not .Last}}
-      <form method="post" action="/b/{{$slug}}/columns/{{.Column.ID}}/move" class="shrink-0">
+      <form method="post" action="/b/{{$slug}}/columns/{{.Column.ID}}/move" class="cell-move">
         <input type="hidden" name="to" value="{{.Next}}">
         <button type="submit" title="Move right" aria-label="Move right"
           class="p-2 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
           <i class="bi bi-arrow-right-short text-lg"></i>
         </button>
       </form>
+      {{else}}
+      <span class="cell-move" aria-hidden="true"></span>
       {{end}}
       {{if not .Only}}
       <!-- The bin asks before it does anything, and it asks in the page rather
@@ -132,7 +141,7 @@
            takes twice a year.
 
            details/summary, so the two steps cost no script. -->
-      <details class="unfold unfold-row">
+      <details class="unfold unfold-row cell-bin">
         <summary title="Delete this column"
           class="inline-flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer
                  text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-500/15">
@@ -166,14 +175,16 @@
           </button>
         </form>
       </details>
+      {{else}}
+      <span class="cell-bin" aria-hidden="true"></span>
       {{end}}
     </div>
   </div>
   {{end}}
 
-  <form method="post" action="/b/{{$slug}}/columns" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <form method="post" action="/b/{{$slug}}/columns" class="card-row p-4">
     <input type="text" name="name" required maxlength="100" placeholder="New column" aria-label="New column name"
-      class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
+      class="cell-grow px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
     <div class="w-full flex items-center gap-3 sm:w-auto sm:contents">
       <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 shrink-0">
         WIP limit
@@ -186,7 +197,7 @@
           class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 accent-indigo-600">
         Clock stops
       </label>
-      <button type="submit" class="ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+      <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
         <i class="bi bi-plus mr-1"></i>Add
       </button>
     </div>
@@ -290,21 +301,21 @@
        it, then what it is on and what can be done to it. -->
   <div class="p-4 flex flex-col gap-3">
     <form method="post" action="/b/{{$slug}}/labels/{{.Label.ID}}"
-      class="flex flex-wrap items-center gap-x-4 gap-y-3">
+      class="card-row">
       <input type="text" name="name" value="{{.Label.Name}}" required maxlength="100" aria-label="Label name"
-        class="w-full sm:w-auto sm:flex-1 sm:min-w-40 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+        class="cell-grow px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
       {{template "swatches" .}}
-      <button type="submit" class="row-save shrink-0 px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
+      <button type="submit" class="row-save cell-action px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
     </form>
 
     <div class="flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-      <span class="shrink-0 mr-2">
+      <span class="cell-count">
         {{if .Cards}}on {{.Cards}} card{{if ne .Cards 1}}s{{end}}{{else}}unused{{end}}
       </span>
       <!-- A second form rather than a second button in the first: a form inside
            a form is not valid HTML and the browser drops the inner one. The bin
            asks first, in the page, for the same reason the column's does. -->
-      <details class="unfold unfold-row">
+      <details class="unfold unfold-row cell-bin">
         <summary title="Delete this label"
           class="inline-flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer
                  text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-500/15">
@@ -330,14 +341,17 @@
        keeps its 18rem and the whole colour list drops onto a second line, which
        made the last row of the card look unlike the five above it. Without one
        the field gives up what the row is short of. -->
-  <form method="post" action="/b/{{$slug}}/labels" class="p-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+  <form method="post" action="/b/{{$slug}}/labels" class="card-row card-row-nowrap p-4">
     <input type="text" name="name" required maxlength="100" placeholder="New label" aria-label="New label name"
-      class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm sm:w-72">
-    <div class="w-full flex flex-wrap items-center gap-3 sm:w-auto sm:flex-nowrap">
+      class="cell-grow px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">
+    <!-- sm:contents, so the swatches and the Add are cells of the row itself
+         and stand under the swatches and the Saves above them. Below sm they
+         need the box, to sit on one line under the name field. -->
+    <div class="w-full flex flex-wrap items-center gap-3 sm:contents">
       {{template "swatches" .NewLabel}}
       <!-- shrink-0, or a tight row takes the width out of the button instead of
            the field and breaks "+ Add" over two lines. -->
-      <button type="submit" class="ml-auto shrink-0 px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
+      <button type="submit" class="cell-action ml-auto px-3 py-2 text-sm rounded-lg bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white sm:ml-0">
         <i class="bi bi-plus mr-1"></i>Add
       </button>
     </div>
