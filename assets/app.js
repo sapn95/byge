@@ -203,38 +203,56 @@
   }
 
   // --- subtasks ------------------------------------------------------------
-  // The form posts one hidden field, "subtasks", one line per checklist row in
-  // the format "id|flag|title" where flag is 1 for done. An empty id is a row
-  // that has not been saved yet; see model.ParseSubtasks for the reading end.
+  // Each checklist row posts a hidden field of its own, "subtask", in the
+  // format "id|flag|title" where flag is 1 for done. An empty id is a row that
+  // has not been saved yet; see model.ParseSubtaskRecords for the reading end.
+  // One field per row and not one field for the whole checklist, because a
+  // title may hold a newline and a newline used to be what ended a row.
   // A checklist row is markup the server owns, so the Add Subtask button is an
-  // hx-get and there is nothing here that builds one. What is left is the two
-  // things markup cannot say: take a row away, and put the cursor in a row
-  // that has just arrived. Both are delegated from the document, so a form
-  // htmx swaps in needs no wiring of its own.
+  // hx-get and there is nothing here that builds one. What is left is the
+  // three things markup cannot say: take a row away, grow a row to what is in
+  // it, and put the cursor in a row that has just arrived. All are delegated
+  // from the document, so a form htmx swaps in needs no wiring of its own.
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.remove-subtask-btn');
     if (btn) { btn.closest('.subtask-row').remove(); }
   });
 
+  // A row is one line high in the markup and grows from there. Measuring needs
+  // the box laid out: on something still hidden scrollHeight is 0 and the row
+  // would collapse to nothing, so every caller grows a row once it is on
+  // screen and never before.
+  function growSubtask(field) {
+    field.style.height = 'auto';
+    field.style.height = field.scrollHeight + 'px';
+  }
+
+  function growSubtasks(root) {
+    (root || document).querySelectorAll('.subtask-text').forEach(growSubtask);
+  }
+
+  document.addEventListener('input', function (e) {
+    if (e.target.classList.contains('subtask-text')) { growSubtask(e.target); }
+  });
+
   window.prepareSubtasks = function (form) {
     var container = form.querySelector('.subtasks-container');
-    var hidden = form.querySelector('.subtasks-hidden');
-    var lines = [];
     container.querySelectorAll('.subtask-row').forEach(function (row) {
       var text = row.querySelector('.subtask-text').value.trim();
-      if (text !== '') {
-        // id first, so a line keeps its identity across a save: without it every
-        // save minted new ids and a tick from another tab hit a line that was
-        // no longer there. A row somebody has just typed carries an empty id.
-        //
-        // data-subtask and not data-id, because data-id on a card is what the
-        // double-click handler looks for: a checklist row carrying one made a
-        // double-click in the gap beside a checkbox ask for /cards/<subtask>/edit.
-        lines.push((row.dataset.subtask || '') + '|' +
-          (row.querySelector('.subtask-complete').checked ? '1' : '0') + '|' + text);
-      }
+      var field = row.querySelector('.subtask-field');
+      // A disabled field is not posted, which leaves an empty row out of the
+      // save without taking the row off the screen while the form is going.
+      field.disabled = text === '';
+      // id first, so a line keeps its identity across a save: without it every
+      // save minted new ids and a tick from another tab hit a line that was
+      // no longer there. A row somebody has just typed carries an empty id.
+      //
+      // data-subtask and not data-id, because data-id on a card is what the
+      // double-click handler looks for: a checklist row carrying one made a
+      // double-click in the gap beside a checkbox ask for /cards/<subtask>/edit.
+      field.value = (row.dataset.subtask || '') + '|' +
+        (row.querySelector('.subtask-complete').checked ? '1' : '0') + '|' + text;
     });
-    hidden.value = lines.join('\n');
     return true;
   };
 
@@ -249,7 +267,7 @@
     if (target.classList.contains('subtasks-container')) {
       var row = target.lastElementChild;
       var field = row && row.querySelector('.subtask-text');
-      if (field) { field.focus(); }
+      if (field) { growSubtask(field); field.focus(); }
     }
     if (!target.id) { return; }
     if (target.id.indexOf('cards-') === 0) {
@@ -261,7 +279,10 @@
       }
     }
     if (target.id === 'editCardModalContent') {
+      // Grown after the modal is up: a box that is still display:none measures
+      // 0 and every checklist row would arrive with no height at all.
       showModal('editCardModal');
+      growSubtasks(target);
     }
     if (target.id.indexOf('comments-') === 0) {
       // The "nothing said yet" line takes itself away: app.css hides it as

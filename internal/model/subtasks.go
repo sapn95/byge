@@ -25,30 +25,57 @@ import "strings"
 func ParseSubtasks(text string) []Subtask {
 	var out []Subtask
 	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+		if st, ok := parseSubtask(line); ok {
+			st.Position = len(out) + 1
+			out = append(out, st)
 		}
-		st := Subtask{Title: line}
-		if first, rest, ok := strings.Cut(line, "|"); ok {
-			id, flag := strings.TrimSpace(first), ""
-			title := rest
-			if mid, after, ok := strings.Cut(rest, "|"); ok && isFlag(mid) && !isFlag(id) {
-				flag, title = strings.TrimSpace(mid), after
-				st.ID = ID(id)
-			} else {
-				flag = id
-			}
-			st.Done = flag == "1"
-			st.Title = strings.TrimSpace(title)
-			if st.Title == "" {
-				continue
-			}
-		}
-		st.Position = len(out) + 1
-		out = append(out, st)
 	}
 	return out
+}
+
+// ParseSubtaskRecords reads one record per value, which is how the edit form
+// posts a checklist: a hidden field per row rather than one field with a line
+// per row.
+//
+// A record has the shape described above. What the two readers do not share is
+// where a record ends: here it is the end of the value, so a title may hold
+// newlines. That is the whole reason for the second one, and the reason the
+// form stopped joining its rows with "\n".
+func ParseSubtaskRecords(values []string) []Subtask {
+	var out []Subtask
+	for _, v := range values {
+		if st, ok := parseSubtask(v); ok {
+			st.Position = len(out) + 1
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
+// parseSubtask reads one record, without a position. It reports false for a
+// record that names no subtask: one that is blank, or whose title is empty
+// once trimmed.
+func parseSubtask(record string) (Subtask, bool) {
+	record = strings.TrimSpace(record)
+	if record == "" {
+		return Subtask{}, false
+	}
+	st := Subtask{Title: record}
+	first, rest, ok := strings.Cut(record, "|")
+	if !ok {
+		return st, true
+	}
+	id, flag := strings.TrimSpace(first), ""
+	title := rest
+	if mid, after, ok := strings.Cut(rest, "|"); ok && isFlag(mid) && !isFlag(id) {
+		flag, title = strings.TrimSpace(mid), after
+		st.ID = ID(id)
+	} else {
+		flag = id
+	}
+	st.Done = flag == "1"
+	st.Title = strings.TrimSpace(title)
+	return st, st.Title != ""
 }
 
 // isFlag reports whether a field is a done flag, which is the one test that

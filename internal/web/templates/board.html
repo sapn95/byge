@@ -174,4 +174,17 @@
     <div class="modal-content" id="editCardModalContent"></div>
   </div>
 </div>
+
+<!-- The addresses the two boxes that ask for one can offer, so that assigning
+     somebody is typing two letters and not their whole address. One list for
+     the page: an id belongs to a document once, and this page draws one of
+     those boxes per card and one more in the edit modal. Both point here, and
+     a fragment htmx swaps in needs no list of its own.
+     Behind .User.Email for the reason the roster in the app bar is: it is the
+     same list of people's addresses, and an anonymous reader has no business
+     with it. Whoever is already assigned somewhere on the board is a button
+     above the box, which is a list this one does not have to repeat. -->
+{{if .User.Email}}{{with viewers}}
+<datalist id="people">{{range .}}<option value="{{.Email}}">{{.Display}}</option>{{end}}</datalist>
+{{end}}{{end}}
 {{end}}
