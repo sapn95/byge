@@ -647,5 +647,6 @@ func (s *Server) archive(w http.ResponseWriter, r *http.Request) {
 		page.Cards = append(page.Cards, s.cardView(u, b, clock, c, counts[c.ID], nil))
 	}
 	page.Boards = s.navBoards(r.Context())
+	page.Readers = s.readers(r.Context(), b.ID)
 	s.render(w, s.pages["archive"], "layout", http.StatusOK, page)
 }

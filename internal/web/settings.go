@@ -84,6 +84,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		})
 	}
 	p.Boards = s.navBoards(r.Context())
+	p.Readers = s.readers(r.Context(), b.ID)
 	s.render(w, s.pages["settings"], "layout", status, p)
 }
 

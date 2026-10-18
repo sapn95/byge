@@ -8,6 +8,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -134,6 +135,7 @@ func (s *Server) renderAccess(w http.ResponseWriter, r *http.Request, status int
 
 	s.placeFailure(&p, f)
 	p.Boards = s.navBoards(ctx)
+	p.Readers = s.readers(ctx, b.ID)
 	s.render(w, s.pages["access"], "layout", status, p)
 }
 
@@ -180,6 +182,67 @@ func (s *Server) placeFailure(p *accessPage, f grantFailure) {
 	default:
 		p.Error = f.Message
 	}
+}
+
+// readers is who this board grants a role to, for the panel in the app bar.
+//
+// Owner only, because BoardGrants is: the list of everybody who may read a
+// board is itself something only its owner sees. A refusal is an empty panel
+// rather than an error, so the board still draws for a reader; the panel is
+// then simply not there, which is the honest answer to a question this caller
+// may not ask.
+//
+// It used to draw the AUTH_VIEWERS roster instead. That roster is a
+// deployment-wide list of names and said nothing about this board, so from
+// 2.17 on, when the board began enforcing grants, the panel named people who
+// are refused at the door.
+func (s *Server) readers(ctx context.Context, boardID model.ID) []readerView {
+	grants, err := s.svc.BoardGrants(ctx, boardID)
+	if err != nil {
+		if !errors.Is(err, service.ErrForbidden) {
+			s.log.Warn("could not list a board's grants for the panel", "board", boardID, "err", err)
+		}
+		return nil
+	}
+	// Only when a group is actually granted: an owner who is not a group
+	// admin is refused this, and most boards have no group on them at all.
+	names := map[model.ID]string{}
+	for _, g := range grants {
+		if g.Principal.Kind == model.PrincipalGroup {
+			if groups, err := s.svc.Groups(ctx); err == nil {
+				for _, grp := range groups {
+					names[grp.ID] = grp.Name
+				}
+			}
+			break
+		}
+	}
+	roster := make(map[string]string, len(s.viewers))
+	for _, v := range s.viewers {
+		roster[v.Email] = v.Name
+	}
+	out := make([]readerView, 0, len(grants))
+	for _, g := range grants {
+		r := readerView{Role: string(g.Role), Name: g.Principal.ID}
+		switch g.Principal.Kind {
+		case model.PrincipalUser:
+			r.Email = g.Principal.ID
+			if name := roster[r.Email]; name != "" {
+				r.Name = name
+			} else {
+				r.Name = identity.User{Email: r.Email}.Display()
+			}
+		default:
+			// A group deleted between the two reads keeps its id, which is
+			// the honest thing to print.
+			if n, ok := names[model.ID(g.Principal.ID)]; ok {
+				r.Name = n
+			}
+			r.Kind = kindLabel(g.Principal.Kind)
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // knownUsers is the addresses configuration names: the AUTH_VIEWERS roster and

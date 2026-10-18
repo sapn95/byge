@@ -235,13 +235,16 @@ AWS_SESSION_TOKEN=         # only for temporary credentials
 
 `byge` with no arguments serves; `byge migrate` applies migrations and exits; `byge doctor` reports the configuration, below; `byge version` prints the version; `byge export` and `byge import` are further down. `/healthz` says the process is up, `/readyz` says the database answers, and `/version` says which build is answering — which is how you find out whether a deploy actually landed, without fetching a page and looking for markup only the new version renders.
 
-`AUTH_VIEWERS` is the answer to "who else can read this". A board behind a
-sign-in knows who is at the keyboard and nothing about who else was let in, so
-the list is written down here and drawn in the app bar beside your own name. It
-decides nothing: the sign-in admits whoever it admits, and a roster that has
-drifted from it makes the page wrong rather than the board looser. One address
-per person, because it is read by people. It is also what an assignee box
-offers as suggestions, which is the second reason to keep it current.
+`AUTH_VIEWERS` is the people this deployment knows: an address and what to
+call whoever holds it. It admits nobody and it is not an access list. It gives
+an address a name wherever one is printed, and it is what an assignee box
+offers as suggestions, so somebody who has never had a card on a board can
+still be picked in two letters. One address per person, because it is read by
+people.
+
+Who may open a board is that board's own grants, on its access page, and that
+is what the panel in the app bar draws — for an owner, since listing who holds
+what on a board is itself an owner's business.
 
 `AUTH_MODE` says how a caller is recognised. It does not say that a caller has
 to be anybody: a request that arrives without the header or the assertion is

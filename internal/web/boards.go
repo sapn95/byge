@@ -175,6 +175,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request) {
 			page.Results = append(page.Results, s.cardView(u, b, clock, c, counts[c.ID], people))
 		}
 		page.Boards = s.navBoards(r.Context())
+		page.Readers = s.readers(r.Context(), b.ID)
 		s.render(w, s.pages["board"], "layout", http.StatusOK, page)
 		return
 	}
@@ -186,6 +187,7 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request) {
 	}
 	page := s.boardPage(u, b, cards, counts)
 	page.Boards = s.navBoards(r.Context())
+	page.Readers = s.readers(r.Context(), b.ID)
 	s.render(w, s.pages["board"], "layout", http.StatusOK, page)
 }
 

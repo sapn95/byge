@@ -140,4 +140,6 @@ type offlinePage struct {
 	// BoardSlug is what layout.html reads for the body attribute; there is no
 	// board here, and an empty one leaves the attribute off.
 	BoardSlug string
+	// Readers stays empty, for the same reason.
+	Readers []readerView
 }

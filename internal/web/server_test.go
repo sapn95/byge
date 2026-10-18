@@ -3044,7 +3044,7 @@ func TestTheBoardCanBeInstalled(t *testing.T) {
 			identity.User{Email: "ada@example.invalid", Name: "Ada Lovelace"})))
 		body := rec.Body.String()
 		for _, leak := range []string{"ada@example.invalid", "grace@example.invalid",
-			"Ada Lovelace", "Who can see this board"} {
+			"Ada Lovelace", "Who can open this board"} {
 			if strings.Contains(body, leak) {
 				t.Errorf("the cached offline page carries %q", leak)
 			}
@@ -3160,60 +3160,106 @@ func TestAMachineCallerHasNoRole(t *testing.T) {
 	})
 }
 
-// The app bar says who can see the board, because a board behind a sign-in
-// knows who is at the keyboard and nothing about who else was let in.
-func TestViewerRoster(t *testing.T) {
+// between returns what the body holds between two markers, so an assertion
+// about one panel is not satisfied by markup somewhere else on the page.
+func between(t *testing.T, body, from, to string) string {
+	t.Helper()
+	i := strings.Index(body, from)
+	j := strings.Index(body, to)
+	if i < 0 || j < i {
+		t.Fatalf("the page has no section from %q to %q (%d, %d)", from, to, i, j)
+	}
+	return body[i:j]
+}
+
+// The app bar says who may open this board. It used to say the AUTH_VIEWERS
+// roster, which is a deployment-wide list of names and not an answer about
+// this board at all: once grants were enforced it was naming people the board
+// refuses.
+func TestWhoCanOpenThisBoard(t *testing.T) {
 	roster := []identity.User{
 		{Email: "ada@example.com", Name: "Ada Lovelace"},
 		{Email: "grace.hopper@example.com"},
 	}
 
-	t.Run("every name and address is on the page", func(t *testing.T) {
+	t.Run("an owner is shown every principal and its role", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
-		e.grant(t, e.board.ID, "ada@example.com", model.RoleRead)
-		body := e.doAs("ada@example.com", http.MethodGet, "/b/demo", nil).Body.String()
+		e.grant(t, e.board.ID, "ada@example.com", model.RoleWrite)
+		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
 		for _, want := range []string{
-			"Who can see this board",
-			"Ada Lovelace", "ada@example.com",
-			// No name was configured for the second, so the board reads one
-			// out of the address rather than printing the local part.
-			"Grace Hopper", "grace.hopper@example.com",
+			"Who can open this board",
+			// The name comes out of the roster where there is one.
+			"Ada Lovelace", "ada@example.com", ">write<",
+			"Everybody else is refused",
+			`href="/b/demo/access"`,
 		} {
 			if !strings.Contains(body, want) {
-				t.Errorf("the app bar does not mention %q", want)
+				t.Errorf("the panel does not mention %q", want)
 			}
 		}
 	})
 
-	t.Run("and says it decides nothing", func(t *testing.T) {
+	// The whole point of the change: a name on the roster that holds no grant
+	// here is not somebody who can open this board. Read out of the panel
+	// alone, because the roster is still on the page as assignee suggestions,
+	// which is a list of addresses and not a claim about access.
+	t.Run("a configured viewer with no grant is not listed", func(t *testing.T) {
+		e := seeded(t, WithViewers(roster))
+		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
+		panel := between(t, body, "Who can open this board", "Everybody else is refused")
+		for _, leaked := range []string{"Grace Hopper", "grace.hopper@example.com"} {
+			if strings.Contains(panel, leaked) {
+				t.Errorf("the panel claims %q can open a board they hold nothing on", leaked)
+			}
+		}
+	})
+
+	// BoardGrants is owner only, and the panel is that list. A reader gets the
+	// board and no panel rather than a list they may not be told.
+	t.Run("a reader is not told", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
 		e.grant(t, e.board.ID, "ada@example.com", model.RoleRead)
-		body := e.doAs("ada@example.com", http.MethodGet, "/b/demo", nil).Body.String()
-		if !strings.Contains(body, "decides who gets in") {
-			t.Error("the panel does not say the sign-in is what admits anybody")
+		rr := e.doAs("ada@example.com", http.MethodGet, "/b/demo", nil)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: a reader may open the board", rr.Code)
+		}
+		// The phrase is also the tooltip on the user menu, so the panel is
+		// identified by a line only it carries.
+		if strings.Contains(rr.Body.String(), "Everybody else is refused") {
+			t.Error("a reader was shown the board's access list")
 		}
 	})
 
-	t.Run("no roster, no panel", func(t *testing.T) {
+	t.Run("a granted group is named, not printed as an id", func(t *testing.T) {
 		e := seeded(t)
+		g, err := e.svc.CreateGroup(ownerCtx(), "Platform", []string{"ada@example.com"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.svc.SetBoardGrant(ownerCtx(), e.board.ID,
+			model.Principal{Kind: model.PrincipalGroup, ID: string(g.ID)}, model.RoleRead); err != nil {
+			t.Fatal(err)
+		}
 		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-		// The signed-in user's own menu carries the phrase in its summary
-		// tooltip, so the roster panel is identified by its own copy, which
-		// only renders inside {{if $viewers}}.
-		if strings.Contains(body, "decides who gets in") {
-			t.Error("a board with no roster offers the panel anyway")
+		if !strings.Contains(body, ">Platform<") {
+			t.Error("the group is not named in the panel")
+		}
+		if !strings.Contains(body, ">local group<") {
+			t.Error("the panel does not say the row is a group")
 		}
 	})
 
-	// A board in proxy mode without AUTH_REQUIRED still draws a page for a
-	// caller it could not identify. The roster is a list of people's addresses
-	// and that caller does not get it.
-	t.Run("nobody signed in, no roster", func(t *testing.T) {
+	// A board in proxy mode without AUTH_REQUIRED still draws for a caller it
+	// could not identify, but not this board: no grant reaches one.
+	t.Run("nobody signed in, no page and no panel", func(t *testing.T) {
 		e := seeded(t, WithViewers(roster))
 		e.user = "" // a genuinely unidentified caller, not the default owner
-		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
-		for _, leaked := range []string{"Ada Lovelace", "ada@example.com", "Who can see this board"} {
-			if strings.Contains(body, leaked) {
+		rr := e.do(http.MethodGet, "/b/demo", nil)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", rr.Code)
+		}
+		for _, leaked := range []string{"Ada Lovelace", "ada@example.com", "Everybody else is refused"} {
+			if strings.Contains(rr.Body.String(), leaked) {
 				t.Errorf("an unidentified caller was shown %q", leaked)
 			}
 		}

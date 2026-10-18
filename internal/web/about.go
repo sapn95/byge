@@ -20,6 +20,9 @@ type aboutPage struct {
 	// Vendored and Modules are the things somebody else wrote.
 	Vendored []credit
 	Modules  []credit
+	// Readers stays empty: no board, no panel. The layout reads it on every
+	// page, so the field has to be here.
+	Readers []readerView
 }
 
 // about serves the attribution page.

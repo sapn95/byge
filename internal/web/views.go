@@ -169,6 +169,10 @@ type boardPage struct {
 	// columns. Resolved here so the template asks a boolean rather than
 	// comparing strings.
 	Rows bool
+	// Readers is who the board grants a role to, for the app-bar panel. Empty
+	// for a caller who may not be told; layout.html reads this field on every
+	// page, so a page without a board carries it unset.
+	Readers []readerView
 }
 
 type archivePage struct {
@@ -185,6 +189,7 @@ type archivePage struct {
 	// between an empty archive and a search that found nothing in it.
 	Query     string
 	Searching bool
+	Readers   []readerView
 }
 
 type boardsPage struct {
@@ -196,6 +201,9 @@ type boardsPage struct {
 	// empty for everyone else, rendered as a distinct block on the boards page.
 	Ownerless []model.Board
 	Error     string
+	// Readers stays empty: this page is not a board. The layout reads it on
+	// every page, so the field has to be here.
+	Readers []readerView
 }
 
 // labelPalette is the set of colours the label form offers on every board.
@@ -397,6 +405,19 @@ func kindLabel(k model.PrincipalKind) string {
 	return string(k)
 }
 
+// readerView is one line of the panel that says who can see a board: one
+// principal the board grants a role to, named the way a person would say it.
+type readerView struct {
+	// Email is the address, when the principal is a person. Empty for a
+	// group, which has no address and no picture.
+	Email string
+	Name  string
+	// Kind is empty for a person and names the sort of group otherwise, so a
+	// group does not read as somebody's name.
+	Kind string
+	Role string
+}
+
 // suggestion is one datalist option. Label is shown beside the value and is
 // empty when there is nothing to add.
 type suggestion struct{ Value, Label string }
@@ -431,6 +452,7 @@ type accessPage struct {
 	AddGroup      addForm
 	AddIDP        addForm
 	Error         string // a reason not tied to one form
+	Readers       []readerView
 }
 
 // groupView wraps a group with its member count and a members string joined one
@@ -452,6 +474,8 @@ type groupsPage struct {
 	Boards []model.Board
 	Groups []groupView
 	Error  string
+	// Readers stays empty, as on the boards page: no board, no panel.
+	Readers []readerView
 }
 
 type settingsPage struct {
@@ -467,6 +491,7 @@ type settingsPage struct {
 	NewLabel labelView
 	SLA      slaView
 	Error    string
+	Readers  []readerView
 }
 
 // cardView builds one card face. clock is the board's SLA clock, passed in
