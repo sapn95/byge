@@ -211,6 +211,7 @@
       <!-- required, so that Set on an empty box does nothing rather than
            quietly unassigning the card. Unassign is its own button. -->
       <input type="email" name="assignee" maxlength="320" required placeholder="somebody@example.com"
+             list="people" autocomplete="off"
              class="min-w-0 flex-1 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600
                     bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
       <button type="submit" class="px-2 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-700 text-white">Set</button>

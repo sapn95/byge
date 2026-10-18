@@ -29,8 +29,22 @@ func cardInput(r *http.Request) service.CardInput {
 		DueDate:     r.FormValue("due_date"),
 		Assignee:    r.FormValue("assignee"),
 		Labels:      labels,
-		Subtasks:    model.ParseSubtasks(r.FormValue("subtasks")),
+		Subtasks:    subtasksFrom(r),
 	}
+}
+
+// subtasksFrom reads the checklist a card form posts. The edit form posts one
+// "subtask" field per row, so a title may hold newlines.
+//
+// A page served before that change and still held by a service worker posts
+// one "subtasks" field with a line per row instead. It is read the old way
+// when no per-row field arrived, so a tab nobody has reloaded saves its
+// checklist rather than wiping it.
+func subtasksFrom(r *http.Request) []model.Subtask {
+	if st := model.ParseSubtaskRecords(r.Form["subtask"]); len(st) > 0 {
+		return st
+	}
+	return model.ParseSubtasks(r.FormValue("subtasks"))
 }
 
 // createCard adds a card to a column and answers with the card, retargeted so

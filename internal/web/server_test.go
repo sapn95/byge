@@ -368,7 +368,7 @@ func TestCardFragments(t *testing.T) {
 	id := string(e.card.ID)
 	want(t, e.do(http.MethodGet, "/cards/"+id, nil), http.StatusOK, "First card", `hx-get="/cards/`+id+`/edit"`)
 	want(t, e.do(http.MethodGet, "/cards/"+id+"/edit", nil), http.StatusOK, `value="First card"`, `value="2026-09-01"`,
-		`name="labels"`, "checked", `value="sub two"`, `hx-post="/cards/`+id+`"`)
+		`name="labels"`, "checked", ">sub two</textarea>", `hx-post="/cards/`+id+`"`)
 	want(t, e.do(http.MethodGet, "/cards/nope", nil), http.StatusNotFound)
 	want(t, e.do(http.MethodGet, "/cards/nope/edit", nil), http.StatusNotFound)
 
@@ -2942,7 +2942,7 @@ func TestSubtaskRowComesFromTheServer(t *testing.T) {
 	}
 	// The same markup the edit form renders for a subtask a card already has.
 	edit := e.do(http.MethodGet, "/cards/"+string(e.card.ID)+"/edit", nil).Body.String()
-	if !strings.Contains(edit, `class="subtask-row flex items-center space-x-2 mb-2"`) {
+	if !strings.Contains(edit, `class="subtask-row flex items-start space-x-2 mb-2"`) {
 		t.Error("the edit form and /subtask-row have drifted apart")
 	}
 	// Both forms carry the button, and in both the container it appends to is
@@ -3824,4 +3824,139 @@ func TestMovingAColumnTwiceMovesItOnce(t *testing.T) {
 	if names()[0] == first {
 		t.Error("a request with a direction did nothing")
 	}
+}
+
+// A checklist line is often a sentence, so the box holds more than one line
+// and a row posts a field of its own. The newline used to be the thing that
+// ended a row, which is why both ends had to change together.
+func TestMultilineSubtasks(t *testing.T) {
+	t.Run("a row is a box that grows and a field of its own", func(t *testing.T) {
+		e := seeded(t)
+		for name, body := range map[string]string{
+			"the edit form": e.do(http.MethodGet, "/cards/"+string(e.card.ID)+"/edit", nil).Body.String(),
+			"an added row":  e.do(http.MethodGet, "/subtask-row", nil).Body.String(),
+		} {
+			for _, want := range []string{`<textarea rows="1"`, `class="subtask-text`, `name="subtask" class="subtask-field"`} {
+				if !strings.Contains(body, want) {
+					t.Errorf("%s has no %q", name, want)
+				}
+			}
+			if strings.Contains(body, "subtasks-hidden") {
+				t.Errorf("%s still posts the whole checklist in one field", name)
+			}
+		}
+	})
+
+	t.Run("a newline inside a title survives the save", func(t *testing.T) {
+		e := seeded(t)
+		ctx := ownerCtx()
+		before, err := e.svc.Card(ctx, e.card.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept := before.Subtasks[0].ID
+		rr := e.do(http.MethodPost, "/cards/"+string(e.card.ID), form(
+			"title", "Edited",
+			"subtask", string(kept)+"|0|buy milk\nand bread",
+			"subtask", "|1|second line",
+			"subtask", "|0|   ",
+		), "Content-Type", "application/x-www-form-urlencoded")
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("status = %d: %s", rr.Code, rr.Body.String())
+		}
+		after, err := e.svc.Card(ctx, e.card.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after.Subtasks) != 2 {
+			t.Fatalf("subtasks = %+v, want the two that had a title", after.Subtasks)
+		}
+		if after.Subtasks[0].Title != "buy milk\nand bread" {
+			t.Errorf("title = %q, want the newline kept", after.Subtasks[0].Title)
+		}
+		if after.Subtasks[0].ID != kept {
+			t.Errorf("id = %q, want the line to keep %q across the save", after.Subtasks[0].ID, kept)
+		}
+		if !after.Subtasks[1].Done {
+			t.Error("the second line lost its tick")
+		}
+	})
+
+	// A tab that loaded the page before this change posts one field with a
+	// line per row, and the service worker can hold such a page for days.
+	t.Run("a page cached before the change still saves", func(t *testing.T) {
+		e := seeded(t)
+		rr := e.do(http.MethodPost, "/cards/"+string(e.card.ID), form(
+			"title", "Edited", "subtasks", "|0|first\n|1|second",
+		), "Content-Type", "application/x-www-form-urlencoded")
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("status = %d: %s", rr.Code, rr.Body.String())
+		}
+		after, err := e.svc.Card(ownerCtx(), e.card.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after.Subtasks) != 2 || after.Subtasks[0].Title != "first" || !after.Subtasks[1].Done {
+			t.Fatalf("the old line format was not read: %+v", after.Subtasks)
+		}
+	})
+}
+
+// Assigning somebody was typing their whole address: the only shortcut was the
+// people already on the board, and somebody who has never had a card is not
+// one of them. The roster the deployment configures is a suggestion list now.
+func TestAssigneeSuggestions(t *testing.T) {
+	roster := []identity.User{
+		{Email: "ada@example.com", Name: "Ada Lovelace"},
+		{Email: "grace.hopper@example.com"},
+	}
+
+	t.Run("the board carries the list and both boxes point at it", func(t *testing.T) {
+		e := seeded(t, WithViewers(roster))
+		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
+		for _, want := range []string{
+			`<datalist id="people">`,
+			`<option value="ada@example.com">Ada Lovelace</option>`,
+			// No name configured, so the board reads one out of the address.
+			`<option value="grace.hopper@example.com">Grace Hopper</option>`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("the board page has no %q", want)
+			}
+		}
+		if n := strings.Count(body, `list="people"`); n == 0 {
+			t.Error("no box on the board offers the list")
+		}
+		// The modal is a fragment swapped into this page: it points at the
+		// page's list rather than carrying one, which is why there is no
+		// second datalist to find in it.
+		edit := e.do(http.MethodGet, "/cards/"+string(e.card.ID)+"/edit", nil).Body.String()
+		if !strings.Contains(edit, `list="people"`) {
+			t.Error("the edit form's assignee box offers no list")
+		}
+		if strings.Contains(edit, "<datalist") {
+			t.Error("the fragment carries a second list with the same id")
+		}
+	})
+
+	// The list is the roster under another name, so it is behind the same
+	// gate: a caller the board could not identify does not get a list of
+	// people's addresses.
+	t.Run("nobody signed in, no list", func(t *testing.T) {
+		e := seeded(t, WithViewers(roster))
+		e.user = ""
+		body := e.do(http.MethodGet, "/b/demo", nil).Body.String()
+		for _, leaked := range []string{"<datalist", "ada@example.com"} {
+			if strings.Contains(body, leaked) {
+				t.Errorf("an unidentified caller was shown %q", leaked)
+			}
+		}
+	})
+
+	t.Run("no roster, no list", func(t *testing.T) {
+		body := seeded(t).do(http.MethodGet, "/b/demo", nil).Body.String()
+		if strings.Contains(body, "<datalist") {
+			t.Error("a board with no roster draws an empty list")
+		}
+	})
 }

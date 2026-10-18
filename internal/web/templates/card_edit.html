@@ -1,10 +1,18 @@
 {{/* One line of a checklist. Rendered for a subtask a card already has, and
      served on its own from /subtask-row for one somebody is adding. */}}
 {{define "subtaskrow"}}
-<div class="subtask-row flex items-center space-x-2 mb-2" data-subtask="{{.ID}}">
-  <input type="checkbox" class="subtask-complete w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"{{if .Done}} checked{{end}}>
-  <input type="text" value="{{.Title}}" class="subtask-text flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm" placeholder="Subtask">
-  <button type="button" class="remove-subtask-btn text-red-500 hover:text-red-700 p-1" title="Remove"><i class="bi bi-x text-lg"></i></button>
+<div class="subtask-row flex items-start space-x-2 mb-2" data-subtask="{{.ID}}">
+  <input type="checkbox" class="subtask-complete mt-3 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"{{if .Done}} checked{{end}}>
+  <!-- A textarea and not a one-line input: a checklist line is often a
+       sentence, and one that did not fit scrolled sideways inside a box a
+       single row high. It is one row high in the markup and app.js grows it to
+       its content, so a browser running no script still shows a whole row. -->
+  <textarea rows="1" placeholder="Subtask" class="subtask-text flex-1 resize-none overflow-hidden px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm">{{.Title}}</textarea>
+  <!-- One posted field per row, rather than one field holding the whole
+       checklist: a newline used to be what ended a row, and a title may hold
+       one now. prepareSubtasks fills it and disables it when the row is empty. -->
+  <input type="hidden" name="subtask" class="subtask-field">
+  <button type="button" class="remove-subtask-btn mt-1.5 text-red-500 hover:text-red-700 p-1" title="Remove"><i class="bi bi-x text-lg"></i></button>
 </div>
 {{end}}
 
@@ -57,6 +65,7 @@
   <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Assignee</label>
   <div class="flex items-center gap-2">
     <input type="email" name="assignee" value="{{.Card.Assignee}}" placeholder="nobody" maxlength="320"
+      list="people" autocomplete="off"
       class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
     {{if .Viewer.Email}}
     <button type="button" title="Assign to me"
@@ -97,7 +106,6 @@
           hx-get="/subtask-row" hx-target="previous .subtasks-container" hx-swap="beforeend">
     <i class="bi bi-plus mr-1"></i>Add Subtask
   </button>
-  <input type="hidden" name="subtasks" class="subtasks-hidden">
 </div>
 </div>
 </div>

@@ -764,14 +764,13 @@ func checkCardFields(in CardInput) error {
 		if title == "" {
 			continue
 		}
+		// A title may hold newlines. It could not while the board posted its
+		// checklist as one line per subtask: a break the JSON API let through
+		// came back from the edit form as two subtasks, or as one with the
+		// break eaten. A row posts a field of its own now, so nothing between
+		// the box and the store reads a newline as the end of anything.
 		if err := checkText("subtask", title, MaxTitle, true); err != nil {
 			return err
-		}
-		// A title is one line. The board posts its checklist as one line per
-		// subtask, so a newline the JSON API let through would come back from
-		// the edit form as two subtasks, or as one with the break eaten.
-		if strings.ContainsAny(title, "\n\r") {
-			return invalid("subtask", "must be one line")
 		}
 	}
 	return nil

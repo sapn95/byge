@@ -1335,13 +1335,17 @@ func TestSubtaskIDsAreNotTheCallersToChoose(t *testing.T) {
 		}
 	})
 
-	t.Run("a newline in a title is refused", func(t *testing.T) {
-		// The board posts one line per subtask, so a title with a break in it
-		// could not come back the way it went in.
-		_, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{
+	t.Run("a newline in a title is kept", func(t *testing.T) {
+		// It used to be refused: the board posted one line per subtask, so a
+		// title with a break in it could not come back the way it went in. A
+		// row posts a field of its own now and the break is content.
+		c, err := k.CreateCard(ctx, b.ID, b.Columns[0].ID, CardInput{
 			Title: "Card", Subtasks: []model.Subtask{{Title: "First\nSecond"}}})
-		if !isValidation(err, "subtask") {
-			t.Errorf("err = %v, want a validation error naming subtask", err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Subtasks[0].Title != "First\nSecond" {
+			t.Errorf("title = %q, want both lines", c.Subtasks[0].Title)
 		}
 	})
 

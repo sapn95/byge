@@ -66,6 +66,52 @@ func TestSubtasks(t *testing.T) {
 	}
 }
 
+// One record per posted field, which is how the edit form posts a checklist
+// since a title was allowed to hold more than one line.
+func TestSubtaskRecords(t *testing.T) {
+	t.Run("a newline stays inside the title", func(t *testing.T) {
+		got := ParseSubtaskRecords([]string{
+			"abc123|0|buy milk\nand bread",
+			"|1|done\r\nthing",
+		})
+		want := []Subtask{
+			{ID: "abc123", Title: "buy milk\nand bread", Position: 1},
+			{Title: "done\r\nthing", Done: true, Position: 2},
+		}
+		if len(got) != len(want) {
+			t.Fatalf("got %+v", got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%d: got %+v want %+v", i, got[i], want[i])
+			}
+		}
+	})
+
+	// The same reader as the line format underneath, so the older shapes a v1
+	// row holds are read the same way here.
+	t.Run("the shapes without an id, and the empties", func(t *testing.T) {
+		got := ParseSubtaskRecords([]string{"1|a|b", "no pipe", "", "   ", "|0|  ", "0|open"})
+		want := []Subtask{
+			{Title: "a|b", Done: true, Position: 1},
+			{Title: "no pipe", Position: 2},
+			{Title: "open", Position: 3},
+		}
+		if len(got) != len(want) {
+			t.Fatalf("got %+v", got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%d: got %+v want %+v", i, got[i], want[i])
+			}
+		}
+	})
+
+	if ParseSubtaskRecords(nil) != nil {
+		t.Error("no fields should give nil")
+	}
+}
+
 func TestBoardLookups(t *testing.T) {
 	b := &Board{Columns: []Column{{ID: "c1"}}, Labels: []Label{{ID: "l1"}}}
 	if b.Column("c1") == nil || b.Column("x") != nil || b.Label("l1") == nil || b.Label("x") != nil {
