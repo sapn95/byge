@@ -2,7 +2,7 @@
      served on its own from /subtask-row for one somebody is adding. */}}
 {{define "subtaskrow"}}
 <div class="subtask-row flex items-start space-x-2 mb-2" data-subtask="{{.ID}}">
-  <input type="checkbox" class="subtask-complete mt-3 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"{{if .Done}} checked{{end}}>
+  <input type="checkbox" class="subtask-complete mt-2.5 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"{{if .Done}} checked{{end}}>
   <!-- A textarea and not a one-line input: a checklist line is often a
        sentence, and one that did not fit scrolled sideways inside a box a
        single row high. It is one row high in the markup and app.js grows it to
@@ -12,7 +12,7 @@
        checklist: a newline used to be what ended a row, and a title may hold
        one now. prepareSubtasks fills it and disables it when the row is empty. -->
   <input type="hidden" name="subtask" class="subtask-field">
-  <button type="button" class="remove-subtask-btn mt-1.5 text-red-500 hover:text-red-700 p-1" title="Remove"><i class="bi bi-x text-lg"></i></button>
+  <button type="button" class="remove-subtask-btn text-red-500 hover:text-red-700 p-1" title="Remove"><i class="bi bi-x text-lg"></i></button>
 </div>
 {{end}}
 
