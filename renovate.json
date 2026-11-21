@@ -1,0 +1,67 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Takes over from Dependabot with the same behaviour: one grouped pull request per manager per week, and every update merges itself once all checks are green, majors included. A pull request labelled no-automerge is held. There is no dashboard issue. Pull requests open on Mondays, all day, and merge at any hour, because Mend runs a repository only once a day until its first Renovate pull request is merged. This repository is a fork, and Renovate skips forks unless forkProcessing is enabled. See https://github.com/sapn95/.github/blob/main/CI.md.",
+  "extends": [
+    "config:recommended"
+  ],
+  "ignorePresets": [
+    ":dependencyDashboard"
+  ],
+  "forkProcessing": "enabled",
+  "enabledManagers": [
+    "github-actions",
+    "gomod",
+    "dockerfile"
+  ],
+  "timezone": "Europe/Zurich",
+  "schedule": [
+    "* * * * 1"
+  ],
+  "minimumReleaseAge": "3 days",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "separateMajorMinor": false,
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "automergeStrategy": "squash",
+  "stopUpdatingLabel": "no-automerge",
+  "packageRules": [
+    {
+      "description": "The workflows' actions, in one pull request.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "actions"
+    },
+    {
+      "description": "Only the actions themselves, as Dependabot did. The golangci-lint version and the Postgres service the tests run against stay as written; Postgres matches the compose files, and both are changed by hand.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "container",
+        "service",
+        "github-runner",
+        "uses-with"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "go.mod, in one pull request. go mod tidy keeps go.sum complete.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "go modules",
+      "postUpdateOptions": [
+        "gomodTidy"
+      ]
+    },
+    {
+      "description": "The Dockerfile's build and runtime images, in one pull request.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "groupName": "images"
+    }
+  ]
+}
