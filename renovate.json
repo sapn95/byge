@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Takes over from Dependabot with the same behaviour: one grouped pull request per manager per week, and every update merges itself once all checks are green, majors included. A pull request labelled no-automerge is held. There is no dashboard issue. Pull requests open on Mondays, all day, and merge at any hour, because Mend runs a repository only once a day until its first Renovate pull request is merged. This repository is a fork, and Renovate skips forks unless forkProcessing is enabled. See https://github.com/sapn95/.github/blob/main/CI.md.",
+  "description": "Takes over from Dependabot with the same behaviour: one grouped pull request per manager per week, and every update merges itself once all checks are green, majors included. A pull request labelled no-automerge is held. There is no dashboard issue. Pull requests open on Mondays, all day and all in the same run, and merge at any hour, because Mend runs a repository only once a day until its first Renovate pull request is merged. This repository is a fork, and Renovate skips forks unless forkProcessing is enabled. See https://github.com/sapn95/.github/blob/main/CI.md.",
   "extends": [
     "config:recommended"
   ],
@@ -20,6 +20,7 @@
   "minimumReleaseAge": "3 days",
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "separateMajorMinor": false,
+  "prHourlyLimit": 0,
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": false,
