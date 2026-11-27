@@ -1,0 +1,56 @@
+{
+  "name": "byge-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for byge, the self-hosted kanban board: boards, cards, columns, labels, checklists and comments over byge's JSON API, with Cloudflare Access sign-in through cloudflared",
+  "type": "module",
+  "bin": {
+    "byge-mcp": "index.js"
+  },
+  "main": "lib.js",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "kanban",
+    "byge"
+  ],
+  "license": "MIT",
+  "author": "sapn95",
+  "homepage": "https://github.com/sapn95/byge/tree/homelab/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sapn95/byge.git",
+    "directory": "mcp"
+  },
+  "bugs": "https://github.com/sapn95/byge/issues",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "eslint .",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --test --test-concurrency=1 test/",
+    "coverage": "c8 --reporter=text-summary --include=lib.js --check-coverage --lines 85 --functions 85 --branches 75 node --test --test-concurrency=1 test/",
+    "gate": "node --check index.js && node --check lib.js && npm run lint && npm run smoke && npm run coverage",
+    "prepublishOnly": "npm run gate"
+  },
+  "files": [
+    "index.js",
+    "lib.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "c8": "^12.0.0",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0"
+  }
+}

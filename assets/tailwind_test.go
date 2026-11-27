@@ -82,8 +82,10 @@ func TestEveryFileThatWritesAClassIsCompiled(t *testing.T) {
 			// checkout of this same repository: `git worktree add` inside the
 			// tree puts a whole copy of assets/ under it, and without this the
 			// walk reports that copy's app.js as uncovered and fails for
-			// everybody who keeps a branch checked out that way.
-			case ".git", ".tools", ".worktrees", "assets/vendor":
+			// everybody who keeps a branch checked out that way. mcp is the
+			// MCP server, a Node package that renders no page; its
+			// node_modules is full of other people's className.
+			case ".git", ".tools", ".worktrees", "assets/vendor", "mcp":
 				return filepath.SkipDir
 			}
 			return nil

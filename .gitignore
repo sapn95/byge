@@ -11,3 +11,7 @@ coverage.out
 # git worktree add .worktrees/<name>: a second checkout of this repository,
 # which the Tailwind coverage walk also skips.
 /.worktrees/
+
+# The MCP server's dependencies and coverage, installed by npm in mcp/.
+/mcp/node_modules/
+/mcp/coverage/

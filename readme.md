@@ -352,6 +352,16 @@ is signed in as and is a `403` when nobody is. An unknown field in a body is a
 `400` that names the field, because a script that says `titel` should hear
 about it before the card exists.
 
+### For agents: the MCP server
+
+[`mcp/`](mcp/) holds `byge-mcp`, an MCP server over this API, published to npm.
+It takes columns and labels by name, changes only the fields it is given, and
+signs in through `cloudflared` when the board sits behind Cloudflare Access.
+
+``` bash
+claude mcp add byge --scope user --env BYGE_URL=https://kanban.example.org -- npx -y byge-mcp
+```
+
 ### Backups and moving a board
 
 ``` bash
