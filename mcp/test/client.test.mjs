@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -45,7 +45,7 @@ before(async () => {
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${srv.address().port}`;
 });
-after(() => srv.close());
+after(() => { srv.close(); rmSync(dir, { recursive: true, force: true }); });
 
 test('loadConfig picks the auth from what is set', () => {
   assert.equal(loadConfig({ BYGE_URL: 'https://board.example.org///' }).url, 'https://board.example.org');
@@ -97,7 +97,6 @@ test('requests carry the configured headers and the cloudflared token', async ()
   assert.equal(a.headers['x-extra'], 'yes');
   assert.equal(b.headers['content-type'], 'application/json');
   // The token is cached until it is about to expire.
-  const { readFileSync } = await import('node:fs');
   assert.equal(readFileSync(`${cf}.calls`, 'utf8').trim().split('\n').length, 1);
   assert.equal(await api.del('/api/v1/empty'), null);
   assert.deepEqual(await api.put('/api/v1/three', {}), { path: '/api/v1/three' });
@@ -144,11 +143,38 @@ test('byge_login hands back the URL cloudflared prints', async () => {
   const done = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'cloudflared', BYGE_CLOUDFLARED: fakeCloudflared('cf-done', { login: 'echo "Successfully fetched your token:"' }) });
   assert.deepEqual(await makeHandlers(done, makeClient(done)).byge_login(), { signed_in: true });
   const bad = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'cloudflared', BYGE_CLOUDFLARED: fakeCloudflared('cf-bad', { login: 'echo nope; exit 3' }) });
-  assert.match((await makeHandlers(bad, makeClient(bad)).byge_login()).error, /nope/);
+  await assert.rejects(makeHandlers(bad, makeClient(bad)).byge_login(), /did not start: nope/);
   const none = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'cloudflared', BYGE_CLOUDFLARED: join(dir, 'nothing-here') });
-  assert.match((await makeHandlers(none, makeClient(none)).byge_login()).error, /cloudflared not found/);
+  await assert.rejects(makeHandlers(none, makeClient(none)).byge_login(), /cloudflared not found/);
   const fake = makeHandlers(cfg, makeClient(cfg), { login: async () => ({ started: true, url: '' }) });
-  assert.match((await fake.byge_login()).open_this, /opened the browser itself/);
+  const p = await fake.byge_login();
+  assert.equal(p.pending, true);
+  assert.match(p.note, /cloudflared access login http/);
+  // --quiet is what keeps the JWT out of the log.
+  assert.match(readFileSync(join(dir, 'cf-login.calls'), 'utf8'), /^access login --quiet http/);
+});
+
+test('every advertised tool has a handler, and the other way round', () => {
+  const cfg = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'none' });
+  const keys = Object.keys(makeHandlers(cfg, makeClient(cfg))).sort();
+  assert.deepEqual(keys, TOOLS.map(t => t.name).sort());
+});
+
+test('a configured header in another case is replaced, not doubled', async () => {
+  const cfg = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'none', BYGE_HEADERS: '{"content-type":"text/plain","accept":"text/html"}' });
+  await makeClient(cfg).post('/api/v1/case', { a: 1 });
+  const h = seen.at(-1).headers;
+  assert.equal(h['content-type'], 'application/json');
+  assert.equal(h.accept, 'application/json');
+});
+
+test('byge_api keeps the path under /api/v1/ after parsing', async () => {
+  const cfg = loadConfig({ BYGE_URL: base, BYGE_AUTH: 'none' });
+  const h = makeHandlers(cfg, makeClient(cfg));
+  await assert.rejects(h.byge_api({ method: 'GET', path: '/api/v1/../../secret' }), /stay under it/);
+  await assert.rejects(h.byge_api({ method: 'GET', path: '//evil.example/api/v1/' }), /stay under it/);
+  await assert.rejects(h.byge_api({ method: 'GET', path: 'api/v1/' }), /stay under it/);
+  assert.deepEqual(await h.byge_api({ method: 'GET', path: '/api/v1/x?q=a%20b' }), { path: '/api/v1/x?q=a%20b' });
 });
 
 test('the server turns a thrown error into an error result', async () => {
@@ -161,4 +187,6 @@ test('the server turns a thrown error into an error result', async () => {
   assert.equal(x.content[0].text, 'nope');
   const y = await call({ method: 'tools/call', params: { name: 'byge_y' } }, ctx);
   assert.deepEqual(JSON.parse(y.content[0].text), { ok: 1 });
+  const inherited = await call({ method: 'tools/call', params: { name: 'toString' } }, ctx);
+  assert.match(inherited.content[0].text, /unknown tool: toString/);
 });

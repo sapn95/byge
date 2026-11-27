@@ -4,7 +4,7 @@
 // server is built from ../cmd/byge, which needs Go.
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +26,9 @@ let built = '';
 function binary() {
   if (process.env.BYGE_BIN) return process.env.BYGE_BIN;
   if (!built) {
-    built = join(mkdtempSync(join(tmpdir(), 'byge-mcp-')), 'byge');
+    const dir = mkdtempSync(join(tmpdir(), 'byge-mcp-'));
+    process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
+    built = join(dir, 'byge');
     execFileSync('go', ['build', '-o', built, './cmd/byge'], { cwd: repo, stdio: 'inherit' });
   }
   return built;
@@ -50,6 +52,8 @@ export async function startByge() {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let log = '';
+  let failed = null;
+  child.on('error', e => { failed = e; });
   child.stderr.on('data', d => { log += d; });
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
@@ -57,6 +61,7 @@ export async function startByge() {
       const r = await fetch(`${url}/readyz`);
       if (r.ok) return { url, stop: () => child.kill(), log: () => log };
     } catch { /* not up yet */ }
+    if (failed) throw new Error(`byge did not start from ${binary()}: ${failed.code || failed.message}`);
     if (child.exitCode !== null) break;
     await new Promise(r => setTimeout(r, 100));
   }

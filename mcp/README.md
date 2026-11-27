@@ -91,6 +91,12 @@ Where the tools behave differently from the API:
 - Checklist lines given by title keep their id when the title already exists,
   so a rewritten checklist does not replace lines that were already there.
 
+The API has no revision check. A change to the title, description, due date,
+column, labels as a whole set, or the checklist reads the card and writes it
+back, so an edit somebody else saves in the moment between can be lost. A
+change made only of an assignee, `add_labels` and `remove_labels` goes through
+the API's narrow routes and leaves the rest of the card alone.
+
 ## Develop
 
 ``` bash

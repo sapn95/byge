@@ -70,7 +70,8 @@ try {
   // "unknown tool" is the one answer that proves no branch handles a name.
   for (const n of names) {
     const r = await send('tools/call', { name: n, arguments: {} });
-    check(!/unknown tool/i.test(JSON.stringify(r?.result ?? r)), `${n}: reaches a handler`);
+    // A JSON-RPC error never reached a handler either, so it fails too.
+    check(!r?.error && r?.result && !/unknown tool/i.test(JSON.stringify(r.result)), `${n}: reaches a handler`);
   }
   const bogus = await send('tools/call', { name: 'byge_nope', arguments: {} });
   check(bogus?.result?.isError === true, 'an unknown tool is an error');
