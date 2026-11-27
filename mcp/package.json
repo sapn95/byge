@@ -29,8 +29,8 @@
     "start": "node index.js",
     "lint": "eslint .",
     "smoke": "node scripts/smoke.mjs",
-    "test": "node --test --test-concurrency=1 test/",
-    "coverage": "c8 --reporter=text-summary --include=lib.js --check-coverage --lines 85 --functions 85 --branches 75 node --test --test-concurrency=1 test/",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "coverage": "c8 --reporter=text-summary --include=lib.js --check-coverage --lines 85 --functions 85 --branches 75 node --test --test-concurrency=1 test/*.test.mjs",
     "gate": "node --check index.js && node --check lib.js && npm run lint && npm run smoke && npm run coverage",
     "prepublishOnly": "npm run gate"
   },
