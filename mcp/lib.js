@@ -20,7 +20,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, openSync, closeSync, mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 
 // Name and version come from package.json: `npm version` bumps only that file,
@@ -114,36 +116,39 @@ function makeAuth(cfg) {
 
 // Start `cloudflared access login` and hand back the URL it prints. The
 // process is left running: the token lands in that process once the person
-// has signed in, and killing it while they do loses it.
+// has signed in, and killing it while they do loses it. Its output goes to a
+// file, not a pipe, so it survives this server exiting: a pipe with nobody
+// reading it would kill cloudflared on its next write.
 function startLogin(cfg) {
   return new Promise(resolve => {
-    let out = '';
+    const log = join(mkdtempSync(join(tmpdir(), 'byge-mcp-login-')), 'cloudflared.log');
+    const fd = openSync(log, 'w', 0o600);
     let done = false;
-    let child;
     const finish = r => {
       if (done) return;
       done = true;
+      clearInterval(poll);
       clearTimeout(timer);
       resolve(r);
     };
-    const timer = setTimeout(() => finish({ started: true, url: '' }), 8000);
-    try {
-      child = spawn(cfg.cloudflared, ['access', 'login', cfg.url], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-    } catch (e) {
-      finish({ started: false, error: String(e.message || e) });
-      return;
-    }
-    const scan = d => {
-      out += d.toString();
+    const child = spawn(cfg.cloudflared, ['access', 'login', cfg.url], { stdio: ['ignore', fd, fd], detached: true });
+    closeSync(fd);
+    const scan = () => {
+      let out;
+      try { out = readFileSync(log, 'utf8'); } catch { return ''; }
       // The login page is /cdn-cgi/access/cli on the application's own host.
       const m = out.match(/https:\/\/\S+\/cdn-cgi\/access\/cli\S*/);
       if (m) finish({ started: true, url: m[0] });
-      if (/Successfully fetched your token/i.test(out)) finish({ started: true, url: '', already: true });
+      else if (/Successfully fetched your token/i.test(out)) finish({ started: true, url: '', already: true });
+      return out;
     };
-    child.stdout.on('data', scan);
-    child.stderr.on('data', scan);
+    const poll = setInterval(scan, 100);
+    const timer = setTimeout(() => finish({ started: true, url: '' }), 8000);
     child.on('error', e => finish({ started: false, error: e.code === 'ENOENT' ? `cloudflared not found ("${cfg.cloudflared}")` : String(e.message) }));
-    child.on('exit', code => finish({ started: code === 0, url: '', already: code === 0, error: code === 0 ? '' : out.trim().slice(-400) }));
+    child.on('exit', code => {
+      const out = scan();
+      finish({ started: code === 0, url: '', already: code === 0, error: code === 0 ? '' : out.trim().slice(-400) });
+    });
     child.unref();
   });
 }
