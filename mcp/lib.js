@@ -20,8 +20,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, openSync, closeSync, mkdtempSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, openSync, closeSync, mkdtempSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 
@@ -118,7 +118,9 @@ function makeAuth(cfg) {
 // process is left running: the token lands in that process once the person
 // has signed in, and killing it while they do loses it. Its output goes to a
 // file, not a pipe, so it survives this server exiting: a pipe with nobody
-// reading it would kill cloudflared on its next write.
+// reading it would kill cloudflared on its next write. --quiet keeps the JWT
+// out of that output, and the file is unlinked once this function is done
+// with it, so cloudflared goes on writing into nothing anybody can open.
 function startLogin(cfg) {
   return new Promise(resolve => {
     const log = join(mkdtempSync(join(tmpdir(), 'byge-mcp-login-')), 'cloudflared.log');
@@ -129,9 +131,10 @@ function startLogin(cfg) {
       done = true;
       clearInterval(poll);
       clearTimeout(timer);
+      rmSync(dirname(log), { recursive: true, force: true });
       resolve(r);
     };
-    const child = spawn(cfg.cloudflared, ['access', 'login', cfg.url], { stdio: ['ignore', fd, fd], detached: true });
+    const child = spawn(cfg.cloudflared, ['access', 'login', '--quiet', cfg.url], { stdio: ['ignore', fd, fd], detached: true });
     closeSync(fd);
     const scan = () => {
       let out;
@@ -165,10 +168,14 @@ export class ApiError extends Error {
 export function makeClient(cfg, auth = makeAuth(cfg), fetchImpl = fetch) {
   async function request(method, path, body) {
     if (!cfg.url) throw new Error('BYGE_URL is not set. Point it at the board, e.g. https://kanban.example.org');
-    const headers = { Accept: 'application/json', ...cfg.headers, ...(await auth.headers()) };
+    // A Headers object, so a configured "content-type" and the one set here
+    // are one header and not two that fetch joins into a value byge refuses.
+    const headers = new Headers(cfg.headers);
+    headers.set('Accept', 'application/json');
+    for (const [k, v] of Object.entries(await auth.headers())) headers.set(k, v);
     const init = { method, headers, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) };
     if (body !== undefined) {
-      headers['Content-Type'] = 'application/json';
+      headers.set('Content-Type', 'application/json');
       init.body = JSON.stringify(body);
     }
     let res;
@@ -258,8 +265,18 @@ function makeBoards(api) {
     }
     return want; // let the API answer 404 with its own words
   }
+  // A board named by id is checked against the id that comes back: a slug
+  // from the cache may by now belong to another board after a rename.
   async function board(ref) {
-    return api.get(`/api/v1/boards/${enc(await slugOf(ref))}`);
+    const want = String(ref ?? '').trim();
+    const b = await api.get(`/api/v1/boards/${enc(await slugOf(want))}`);
+    if (/^[a-z0-9]{26}$/.test(want) && b.id !== want && b.slug !== want) {
+      cache.list = null;
+      const again = await api.get(`/api/v1/boards/${enc(await slugOf(want))}`);
+      if (again.id !== want) throw new ApiError(404, `No board with id ${want}.`);
+      return again;
+    }
+    return b;
   }
   return { all, slugOf, board, drop() { cache.list = null; } };
 }
@@ -544,10 +561,17 @@ export function makeHandlers(cfg, api, { login = () => startLogin(cfg) } = {}) {
         return { note: `BYGE_AUTH is ${cfg.auth}; there is nothing to sign in to.` };
       }
       const r = await login();
-      if (!r.started) return { error: r.error || 'cloudflared did not start' };
+      if (!r.started) throw new Error(`cloudflared login did not start: ${r.error || 'no reason given'}`);
       if (r.already) return { signed_in: true };
+      if (!r.url) {
+        return {
+          pending: true,
+          note: `cloudflared started but printed no URL within 8 s. It usually opens the browser itself. Otherwise run: cloudflared access login ${cfg.url}`,
+          then: 'Call byge_whoami after signing in.',
+        };
+      }
       return {
-        open_this: r.url || '(cloudflared opened the browser itself; no URL was printed)',
+        open_this: r.url,
         then: 'Sign in in the browser. cloudflared keeps waiting and stores the token; call byge_whoami afterwards to check.',
       };
     },
@@ -584,8 +608,10 @@ export function makeHandlers(cfg, api, { login = () => startLogin(cfg) } = {}) {
 
     async byge_list_cards({ board, q, column, archived }) {
       const b = await boards.board(board);
-      let path = `/api/v1/boards/${enc(b.slug)}/${archived ? 'archive' : 'cards'}`;
-      if (q) path += `?q=${enc(q)}`;
+      // The archive route takes no search. The cards route searches the
+      // archive when the query says is:archived.
+      let path = `/api/v1/boards/${enc(b.slug)}/${archived && !q ? 'archive' : 'cards'}`;
+      if (q) path += `?q=${enc(archived && !/(^|\s)is:archived(\s|$)/.test(q) ? `is:archived ${q}` : q)}`;
       let cards = await api.get(path);
       const only = column ? columnId(b, column) : '';
       if (only) cards = cards.filter(c => c.column_id === only);
@@ -634,6 +660,26 @@ export function makeHandlers(cfg, api, { login = () => startLogin(cfg) } = {}) {
     async byge_update_card(args) {
       const { card: c, board } = await cardWithBoard(args.card);
       if (!board) throw new Error(`Card ${c.id} is on a board the caller cannot list.`);
+      // The API has no revision check, so a PUT of the whole card can undo an
+      // edit somebody made between the read and the write. An assignee or a
+      // label added or removed has a route of its own that touches nothing
+      // else, so a change made only of those goes there.
+      const CONTENT = ['title', 'description', 'append_description', 'column', 'due_date', 'labels', 'subtasks'];
+      if (!CONTENT.some(k => args[k] !== undefined)) {
+        let now = c;
+        if (args.assignee !== undefined) {
+          now = await api.put(`/api/v1/cards/${enc(c.id)}/assignee`, { assignee: args.assignee });
+        }
+        const want = new Map();
+        for (const id of labelIds(board, args.add_labels ?? [])) want.set(id, true);
+        for (const id of labelIds(board, args.remove_labels ?? [])) want.set(id, false);
+        for (const [id, on] of want) {
+          if (now.labels.includes(id) !== on) {
+            now = await api.post(`/api/v1/cards/${enc(c.id)}/labels/${enc(id)}/toggle`);
+          }
+        }
+        return cardView(now, board);
+      }
       const body = cardInput(c);
       if (args.title !== undefined) body.title = args.title;
       if (args.description !== undefined) body.description = args.description;
@@ -658,12 +704,17 @@ export function makeHandlers(cfg, api, { login = () => startLogin(cfg) } = {}) {
       const { card: c, board } = await cardWithBoard(card);
       if (!board) throw new Error(`Card ${c.id} is on a board the caller cannot list.`);
       const target = columnId(board, column);
-      // The order route moves a card into the column it names and places it
-      // where the list says, in one request that a WIP limit checks once.
-      const cards = await api.get(`/api/v1/boards/${enc(board.slug)}/cards`);
-      const others = cards.filter(x => x.column_id === target && x.id !== c.id)
-        .sort((x, y) => x.position - y.position).map(x => x.id);
-      const order = position === 'top' ? [c.id, ...others] : [...others, c.id];
+      // The order route puts the cards it names first and keeps the rest of
+      // the column behind them, in one request a WIP limit checks once. The
+      // top needs only this card. The bottom has to name the column's cards
+      // too, as read a moment ago: one that somebody moves out in between is
+      // pulled back. The API has no "append" for a move, so that window stays.
+      let order = [c.id];
+      if (position !== 'top') {
+        const cards = await api.get(`/api/v1/boards/${enc(board.slug)}/cards`);
+        order = [...cards.filter(x => x.column_id === target && x.id !== c.id)
+          .sort((x, y) => x.position - y.position).map(x => x.id), c.id];
+      }
       await api.put(`/api/v1/boards/${enc(board.slug)}/columns/${enc(target)}/cards/order`, { order });
       return cardView(await api.get(`/api/v1/cards/${enc(c.id)}`), board);
     },
@@ -712,8 +763,17 @@ export function makeHandlers(cfg, api, { login = () => startLogin(cfg) } = {}) {
     async byge_api({ method, path, body, confirm }) {
       const m = String(method).toUpperCase();
       if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) throw new Error(`Method ${method} is not supported.`);
-      if (!String(path).startsWith('/api/v1/')) throw new Error('path must start with /api/v1/.');
+      // Checked after URL parsing, which resolves "..": the raw string could
+      // start with /api/v1/ and still send the credentials somewhere else.
+      const parsed = new URL(String(path), 'http://byge.invalid');
+      if (!String(path).startsWith('/') || parsed.origin !== 'http://byge.invalid' || !parsed.pathname.startsWith('/api/v1/')) {
+        throw new Error('path must start with /api/v1/ and stay under it.');
+      }
+      path = parsed.pathname + parsed.search;
       if (m === 'DELETE') needConfirm({ confirm }, `DELETE ${path}`);
+      if (m === 'POST' && /\/cards\/bulk\/?$/.test(String(path)) && body?.action === 'delete') {
+        needConfirm({ confirm }, 'A bulk delete');
+      }
       const r = await api.request(m, path, m === 'GET' || m === 'DELETE' ? undefined : (body ?? {}));
       if (m !== 'GET') boards.drop();
       return r ?? { status: 'done' };
@@ -728,7 +788,7 @@ export function makeServer(cfg, handlers) {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
   server.setRequestHandler(CallToolRequestSchema, async req => {
     const { name, arguments: args = {} } = req.params;
-    const h = handlers[name];
+    const h = Object.hasOwn(handlers, name) && typeof handlers[name] === 'function' ? handlers[name] : null;
     if (!h) return { isError: true, content: [{ type: 'text', text: `unknown tool: ${name}` }] };
     try {
       const out = await h(args);

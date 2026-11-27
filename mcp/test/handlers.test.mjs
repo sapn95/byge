@@ -59,6 +59,15 @@ test('the whole card lifecycle, by names', async () => {
   assert.deepEqual(u.labels.sort(), ['Example_Label', 'Other']);
   assert.deepEqual(u.subtasks.map(s => s.id), firstIds);
 
+  // Only an assignee and labels: the narrow routes, which leave the rest alone.
+  const n = await h.byge_update_card({ card: c.id, assignee: 'other@example.org', add_labels: ['Other'], remove_labels: ['Example_Label'] });
+  assert.equal(n.assignee, 'other@example.org');
+  assert.deepEqual(n.labels, ['Other']);
+  assert.equal(n.description, 'first\n\nsecond');
+  const n2 = await h.byge_update_card({ card: c.id, add_labels: ['Example_Label'] });
+  assert.deepEqual(n2.labels.sort(), ['Example_Label', 'Other']);
+  assert.equal(n2.assignee, 'other@example.org');
+
   const r = await h.byge_update_card({ card: c.id, remove_labels: ['Example_Label'], due_date: '', assignee: '' });
   assert.deepEqual(r.labels, ['Other']);
   assert.equal(r.due_date, undefined);
@@ -85,6 +94,9 @@ test('the whole card lifecycle, by names', async () => {
   assert.equal(m.position, 2);
   const m2 = await h.byge_move_card({ card: c.id, column: 'done', position: 'top' });
   assert.equal(m2.position, 1);
+  const m3 = await h.byge_move_card({ card: c.id, column: 'Done', position: 'bottom' });
+  assert.equal(m3.position, 2, 'bottom within the same column');
+  await h.byge_move_card({ card: c.id, column: 'Done', position: 'top' });
   const moved = await h.byge_update_card({ card: d.id, column: 'To Do' });
   assert.equal(moved.column, 'To Do');
 
@@ -108,6 +120,9 @@ test('the whole card lifecycle, by names', async () => {
   assert.ok(a.id);
   const arch = await h.byge_list_cards({ board: b.slug, archived: true });
   assert.equal(arch.archived.length, 1);
+  assert.equal((await h.byge_list_cards({ board: b.slug, archived: true, q: 'Renamed' })).archived.length, 1);
+  assert.equal((await h.byge_list_cards({ board: b.slug, archived: true, q: 'nothing-like-it' })).archived.length, 0);
+  assert.equal((await h.byge_list_cards({ board: b.slug, archived: true, q: 'is:archived Renamed' })).archived.length, 1);
   await h.byge_archive_card({ card: c.id, restore: true });
   assert.equal((await h.byge_list_cards({ board: b.slug, archived: true })).archived.length, 0);
 
@@ -117,9 +132,11 @@ test('the whole card lifecycle, by names', async () => {
 });
 
 test('names that do not resolve say what exists', async () => {
-  await assert.rejects(h.byge_create_card({ board: 'example-agents', title: 'x', column: 'Nope' }),
-    /No column "Nope" on board "example-agents". There are: "To Do", "Waiting", "Done"/);
-  await assert.rejects(h.byge_create_card({ board: 'example-agents', title: 'x', labels: ['Nope'] }), /No label "Nope"/);
+  await h.byge_create_board({ name: 'Example Names', columns: ['To Do', 'Waiting', 'Done'] });
+  await assert.rejects(h.byge_create_card({ board: 'example-names', title: 'x', column: 'Nope' }),
+    /No column "Nope" on board "example-names". There are: "To Do", "Waiting", "Done"/);
+  await assert.rejects(h.byge_create_card({ board: 'example-names', title: 'x', labels: ['Nope'] }), /No label "Nope"/);
+  await assert.rejects(h.byge_get_board({ board: 'abcdefghijklmnopqrstuvwxyz' }), /404/);
   await assert.rejects(h.byge_get_board({ board: 'no-such-board' }), /404/);
   await assert.rejects(h.byge_get_board({ board: '' }), /No board given/);
 });
@@ -141,10 +158,17 @@ test('the raw API tool', async () => {
   assert.ok(index);
   await assert.rejects(h.byge_api({ method: 'GET', path: '/boards' }), /must start with \/api\/v1\//);
   await assert.rejects(h.byge_api({ method: 'TRACE', path: '/api/v1/' }), /not supported/);
-  await assert.rejects(h.byge_api({ method: 'DELETE', path: '/api/v1/boards/example-wip' }), /confirm: true/);
-  const gone = await h.byge_api({ method: 'DELETE', path: '/api/v1/boards/example-wip', confirm: true });
+  await h.byge_create_board({ name: 'Example Doomed' });
+  await assert.rejects(h.byge_api({ method: 'DELETE', path: '/api/v1/boards/example-doomed' }), /confirm: true/);
+  const gone = await h.byge_api({ method: 'DELETE', path: '/api/v1/boards/example-doomed', confirm: true });
   assert.deepEqual(gone, { status: 'done' });
   await assert.rejects(h.byge_api({ method: 'POST', path: '/api/v1/boards', body: { titel: 'x' } }), /400/);
+  const bulk = await h.byge_create_board({ name: 'Example Bulk' });
+  const x = await h.byge_create_card({ board: bulk.slug, title: 'x' });
+  const path = `/api/v1/boards/${bulk.slug}/cards/bulk`;
+  await assert.rejects(h.byge_api({ method: 'POST', path, body: { action: 'delete', ids: [x.id] } }), /bulk delete cannot be undone/);
+  const moved = await h.byge_api({ method: 'POST', path, body: { action: 'archive', ids: [x.id] } });
+  assert.deepEqual(moved.changed, [x.id]);
 });
 
 test('a caller without a grant sees no boards', async () => {
