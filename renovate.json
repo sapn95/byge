@@ -11,7 +11,8 @@
   "enabledManagers": [
     "github-actions",
     "gomod",
-    "dockerfile"
+    "dockerfile",
+    "npm"
   ],
   "timezone": "Europe/Zurich",
   "schedule": [
@@ -63,6 +64,13 @@
         "dockerfile"
       ],
       "groupName": "images"
+    },
+    {
+      "description": "The MCP server's npm packages in mcp/, in one pull request.",
+      "matchManagers": [
+        "npm"
+      ],
+      "groupName": "mcp npm packages"
     }
   ]
 }

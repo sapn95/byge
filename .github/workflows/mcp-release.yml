@@ -1,0 +1,87 @@
+# Publishes the MCP server in mcp/ to npm as byge-mcp. The board itself is
+# released by release.yml on tags v*; this one runs on tags mcp-v*, so the two
+# version lines never wait for each other.
+#
+# Publishing uses npm Trusted Publishing (OIDC): the runner proves its identity
+# to the registry and gets a short-lived token per publish. There is no npm
+# token in this repository. Configured once on npmjs.com for byge-mcp:
+#   Organization or user: sapn95
+#   Repository:           byge
+#   Workflow filename:    mcp-release.yml
+#
+# Release with:
+#   cd mcp && npm version patch --no-git-tag-version
+#   commit, merge, then tag the merge: git tag mcp-v<version> && git push origin mcp-v<version>
+name: mcp-release
+
+on:
+  push:
+    tags: ["mcp-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a release in progress: a run stopped between publishing to
+  # the registry and creating the GitHub Release leaves a version nobody finds.
+  group: mcp-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish byge-mcp to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the GitHub Release for the tag
+      id-token: write # the OIDC token npm verifies
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # A tag and a published version that disagree can never be reconciled:
+      # npm will not take the version again, and a fetched tag cannot move.
+      - name: the tag agrees with package.json
+        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        run: |
+          tag="${GITHUB_REF_NAME#mcp-v}"
+          pkg="$(node -p 'require("./package.json").version')"
+          test "$tag" = "$pkg" || { echo "::error::tag $tag != mcp/package.json $pkg"; exit 1; }
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          # Trusted publishing needs Node >= 22.14.
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      # Trusted publishing needs npm >= 11.5.1; the bundled npm may be older.
+      - name: a recent enough npm
+        run: |
+          npm install -g npm@latest
+          npm --version
+      - run: npm ci --ignore-scripts
+      # The whole gate here: a publish cannot be taken back.
+      - name: the gate
+        run: npm run gate
+      - name: publish
+        run: npm publish
+      - name: github release
+        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#mcp-v}"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && exit 0
+          # --latest=false: the repository's latest release is the board's.
+          gh release create "$GITHUB_REF_NAME" \
+            --title "byge-mcp $version" \
+            --notes "byge-mcp $version on npm: https://www.npmjs.com/package/byge-mcp/v/$version" \
+            --latest=false
+          echo "https://www.npmjs.com/package/byge-mcp/v/$version" >> "$GITHUB_STEP_SUMMARY"

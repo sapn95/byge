@@ -123,6 +123,45 @@ jobs:
       - name: build
         run: CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/byge
 
+  mcp:
+    name: mcp (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor mcp/package.json claims in engines, and the current release.
+        node: ["20", "24"]
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # The tests run the tools against a real byge built from this checkout,
+      # so a change to the JSON API that breaks the MCP server fails here.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      - name: install
+        # --ignore-scripts, so a postinstall in a dependency cannot run on a
+        # runner that has just checked out somebody else's branch.
+        run: npm ci --ignore-scripts
+      - name: syntax
+        run: node --check index.js && node --check lib.js
+      - name: lint
+        run: npm run lint
+      - name: protocol smoke test
+        run: npm run smoke
+      - name: tests and coverage
+        run: npm run coverage
+
   chart:
     name: helm chart
     runs-on: ubuntu-latest
