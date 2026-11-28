@@ -6,7 +6,7 @@
     {{if .Comment.Author}}{{initials .Comment.Author}}{{else}}<i class="bi bi-person"></i>{{end}}
     {{with avatar .Comment.Author}}<img src="{{.}}" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover">{{end}}
   </span>
-  <div class="flex-1 min-w-0 rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-2">
+  <div class="flex-1 min-w-0 rounded-lg bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
     <div class="flex items-baseline gap-2 text-xs text-slate-500 dark:text-slate-400">
       <span class="font-medium text-slate-700 dark:text-slate-200 truncate">
         {{if .Comment.Author}}{{personName .Comment.Author}}{{else}}Anonymous{{end}}
@@ -39,7 +39,7 @@
   </div>
   <!-- Outside the edit form on purpose: a form inside a form is not valid HTML,
        and the browser silently drops the inner one. -->
-  <form class="mt-3 flex items-start gap-2"
+  <form class="mt-3 flex items-end gap-2"
         hx-post="/cards/{{.Card.ID}}/comments" hx-target="#comments-{{.Card.ID}}" hx-swap="beforeend">
     <textarea name="body" rows="2" required maxlength="5000" placeholder="Add a comment"
       id="comment-body-{{.Card.ID}}" aria-label="Add a comment"
@@ -47,7 +47,7 @@
     <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm shrink-0">Post</button>
   </form>
   <p class="mt-2 text-xs text-slate-400 dark:text-slate-500">
-    Comments cannot be edited. You can remove your own.
+    Comments cannot be edited. You can remove your own. Ctrl+Enter or ⌘+Enter posts.
   </p>
 </div>
 {{end}}
