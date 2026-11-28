@@ -11,7 +11,8 @@ html.dark { color-scheme: dark; background-color: #020617; }
 .modal {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(2px);
   display: none;
   justify-content: center;
   align-items: center;
@@ -30,8 +31,6 @@ html.dark { color-scheme: dark; background-color: #020617; }
      it a sheet on a page rather than a second page. */
   max-width: 52rem;
   width: calc(100% - 2rem);
-  max-height: 94vh;
-  overflow-y: auto;
 }
 @media (min-width: 640px) {
   .modal-dialog { width: calc(100% - 5rem); }
@@ -54,10 +53,51 @@ html.dark { color-scheme: dark; background-color: #020617; }
      form does not leave a hole beside a short checklist. */
   .card-fields__main textarea[name="description"] { min-height: 18rem; }
 }
-/* Keep the header and footer in view while a long form scrolls between them. */
-.modal-dialog .modal-content { display: flex; flex-direction: column; max-height: 90vh; }
-.modal-dialog .modal-content > :first-child,
-.modal-dialog .modal-content > form > :first-child { flex: 0 0 auto; }
+/* Keep the header and footer in view while a long form scrolls between them.
+   The sheet is a column capped at 90vh and only .modal-body scrolls. The cap
+   used to sit on the sheet with nothing clipping it, while the dialog around
+   it did the scrolling: a card with a few comments ran past the sheet's
+   bottom edge and drew the comment box over the board behind it. The add
+   form wraps header, body and footer, so it is a column too. */
+.modal-dialog .modal-content,
+.modal-dialog .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.modal-dialog .modal-content { max-height: 90vh; overflow: hidden; }
+.modal-dialog .modal-content > form { flex: 1 1 auto; }
+.modal-content > :not(.modal-body),
+.modal-content > form > :not(.modal-body) { flex: 0 0 auto; }
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* One short movement when the sheet opens, so it reads as arriving over the
+   board rather than replacing it. Nothing moves for someone who asked for no
+   motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .modal.show { animation: modal-fade 140ms ease-out; }
+  .modal.show .modal-content { animation: modal-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+@keyframes modal-fade { from { opacity: 0; } }
+@keyframes modal-rise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
+
+/* One chevron for every drop-down. The native one sat against the right
+   border in Chrome, wherever the padding said it should go, and looked
+   different in every browser. The grey reads on both the light and the dark
+   field. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2394a3b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
 .modal-content {
   background: white;
   border-radius: 14px;

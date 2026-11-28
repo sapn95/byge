@@ -166,6 +166,14 @@
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { closePanels(null); }
+      // Ctrl+Enter, or Cmd+Enter on a Mac, in a text box sends its form: a
+      // comment is posted and the description is saved without reaching for
+      // the mouse. requestSubmit runs the form's own submit handling.
+      var box = e.target;
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && box.tagName === 'TEXTAREA' && box.form) {
+        e.preventDefault();
+        box.form.requestSubmit();
+      }
     });
   }
 
